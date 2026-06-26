@@ -33,11 +33,11 @@ export default async function SettingsPage() {
       </div>
 
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="mb-8 bg-muted/30 p-1 border border-border/50 rounded-xl h-auto flex flex-wrap shadow-sm">
-          <TabsTrigger value="general" className="rounded-lg py-2.5 px-4 font-semibold data-[state=active]:shadow-sm data-[state=active]:bg-background transition-all">General</TabsTrigger>
-          <TabsTrigger value="billing" className="rounded-lg py-2.5 px-4 font-semibold data-[state=active]:shadow-sm data-[state=active]:bg-background transition-all">Billing & Plan</TabsTrigger>
-          <TabsTrigger value="notifications" className="rounded-lg py-2.5 px-4 font-semibold data-[state=active]:shadow-sm data-[state=active]:bg-background transition-all">Notifications</TabsTrigger>
-          <TabsTrigger value="security" className="rounded-lg py-2.5 px-4 font-semibold data-[state=active]:shadow-sm data-[state=active]:bg-background transition-all">Security</TabsTrigger>
+        <TabsList className="mb-8 bg-muted/50 p-1.5 border border-border/60 rounded-xl h-auto flex flex-wrap shadow-inner gap-1">
+          <TabsTrigger value="general" className="rounded-lg py-2.5 px-5 font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">General</TabsTrigger>
+          <TabsTrigger value="billing" className="rounded-lg py-2.5 px-5 font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">Billing & Plan</TabsTrigger>
+          <TabsTrigger value="notifications" className="rounded-lg py-2.5 px-5 font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">Notifications</TabsTrigger>
+          <TabsTrigger value="security" className="rounded-lg py-2.5 px-5 font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">Security</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-6 focus-visible:outline-none focus-visible:ring-0">
