@@ -112,7 +112,7 @@ export default function DashboardSidebar({
                   isCollapsed ? 'justify-center px-0 mx-2' : 'px-3'
                 } ${
                   isActive
-                    ? 'bg-primary text-primary-foreground shadow-md hover:shadow-lg'
+                    ? 'bg-primary text-white shadow-md hover:shadow-lg'
                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
                 onClick={() => onClose && onClose()}
@@ -121,7 +121,7 @@ export default function DashboardSidebar({
                   className={`h-5 w-5 flex-shrink-0 transition-colors ${
                     !isCollapsed ? 'mr-3' : ''
                   } ${
-                    isActive ? 'text-primary-foreground' : 'text-muted-foreground group-hover:text-foreground'
+                    isActive ? 'text-white' : 'text-muted-foreground group-hover:text-foreground'
                   }`}
                   aria-hidden="true"
                 />
