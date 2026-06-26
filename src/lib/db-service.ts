@@ -8,9 +8,15 @@ function isSupabaseConfigured() {
   return process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 }
 
+// Helper to check if admin/service role key is configured
+function isAdminConfigured() {
+  return process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY;
+}
+
 export async function resetUsageIfBillingPeriodExpired(user_id: string, currentEnd: string) {
   const endDate = new Date(currentEnd);
   if (endDate < new Date()) {
+    if (!isAdminConfigured()) return false;
     const adminSupabase = await createAdminClient();
     const newEnd = new Date();
     newEnd.setMonth(newEnd.getMonth() + 1);
@@ -54,6 +60,18 @@ export async function getUserSubscription() {
 
   if (error || !data) {
     // Attempt to create default subscription row if missing using admin client
+    if (!isAdminConfigured()) {
+      // Service role key not configured — return safe defaults
+      return {
+        plan: 'free' as PlanType,
+        aiUsageCount: 0,
+        exportUsageCount: 0,
+        limits: SUBSCRIPTION_PLANS['free'],
+        userEmail: user?.email || '',
+        userName: user?.user_metadata?.full_name || 'User'
+      };
+    }
+
     const adminSupabase = await createAdminClient();
     const { data: newData, error: newError } = await adminSupabase
       .from('user_subscriptions')
@@ -66,7 +84,9 @@ export async function getUserSubscription() {
         plan: 'free' as PlanType,
         aiUsageCount: 0,
         exportUsageCount: 0,
-        limits: SUBSCRIPTION_PLANS['free']
+        limits: SUBSCRIPTION_PLANS['free'],
+        userEmail: user?.email || '',
+        userName: user?.user_metadata?.full_name || 'User'
       };
     }
     data = newData;
@@ -107,6 +127,8 @@ export async function checkAndIncrementAiUsage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
+  if (!isAdminConfigured()) return; // Skip tracking if admin key not set
+
   const adminSupabase = await createAdminClient();
   const { data } = await adminSupabase.from('user_subscriptions').select('ai_usage_count').eq('user_id', user.id).single();
   const current = data?.ai_usage_count || 0;
@@ -129,6 +151,8 @@ export async function checkAndIncrementExportUsage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
+  if (!isAdminConfigured()) return; // Skip tracking if admin key not set
+
   const adminSupabase = await createAdminClient();
   const { data } = await adminSupabase.from('user_subscriptions').select('export_usage_count').eq('user_id', user.id).single();
   const current = data?.export_usage_count || 0;
@@ -146,6 +170,8 @@ export async function upgradePlanMock(newPlan: PlanType) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
+
+  if (!isAdminConfigured()) return; // Skip if admin key not set
 
   const adminSupabase = await createAdminClient();
   await adminSupabase.from('user_subscriptions').update({ user_plan: newPlan }).eq('user_id', user.id);
