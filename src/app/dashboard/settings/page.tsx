@@ -155,20 +155,19 @@ export default async function SettingsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="notifications" className="space-y-6 focus-visible:outline-none focus-visible:ring-0">
-          <Card className="shadow-sm hover:shadow-md transition-shadow border-border rounded-2xl">
-            <CardHeader className="bg-secondary rounded-t-2xl border-b">
-              <CardTitle className="text-lg font-bold">Email Notifications</CardTitle>
+        <TabsContent value="notifications" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Email Notifications</CardTitle>
               <CardDescription>Choose what updates you want to receive.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {['Weekly Job Matches', 'Product Updates', 'Resume Tips & Tricks', 'Account Alerts'].map((item, i) => (
-                <div key={i} className="flex items-center justify-between p-5 border border-border/50 rounded-xl hover:bg-muted/10 transition-colors">
-                  <div className="space-y-1">
-                    <Label className="text-[15px] font-bold cursor-pointer">{item}</Label>
-                    <p className="text-sm text-muted-foreground font-medium">Receive emails about {item.toLowerCase()}.</p>
+                <div key={i} className="flex items-center justify-between p-4 border rounded-xl hover:bg-muted/30 transition-colors">
+                  <div className="space-y-0.5">
+                    <Label className="font-semibold cursor-pointer">{item}</Label>
+                    <p className="text-sm text-muted-foreground">Receive emails about {item.toLowerCase()}.</p>
                   </div>
-                  {/* Custom Toggle Switch UI (visual mock) */}
                   <div className={`h-6 w-11 rounded-full flex items-center p-0.5 cursor-pointer transition-colors ${i === 2 ? 'bg-muted justify-start' : 'bg-primary justify-end'}`}>
                     <div className="bg-background h-5 w-5 rounded-full shadow-md" />
                   </div>
@@ -178,29 +177,29 @@ export default async function SettingsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="security" className="space-y-6 focus-visible:outline-none focus-visible:ring-0">
-          <Card className="shadow-sm hover:shadow-md transition-shadow border-border rounded-2xl">
-            <CardHeader className="bg-secondary rounded-t-2xl border-b">
-              <CardTitle className="text-lg font-bold">Security</CardTitle>
+        <TabsContent value="security" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Security</CardTitle>
               <CardDescription>Manage your password and security settings.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="space-y-2.5">
-                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Current Password</Label>
-                <Input type="password" placeholder="••••••••" className="h-11 shadow-sm font-medium" />
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Current Password</Label>
+                <Input type="password" placeholder="••••••••" />
               </div>
-              <div className="space-y-2.5">
-                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">New Password</Label>
-                <Input type="password" placeholder="••••••••" className="h-11 shadow-sm font-medium" />
+              <div className="space-y-2">
+                <Label>New Password</Label>
+                <Input type="password" placeholder="••••••••" />
               </div>
-              <div className="space-y-2.5">
-                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Confirm New Password</Label>
-                <Input type="password" placeholder="••••••••" className="h-11 shadow-sm font-medium" />
+              <div className="space-y-2">
+                <Label>Confirm New Password</Label>
+                <Input type="password" placeholder="••••••••" />
               </div>
             </CardContent>
-            <CardFooter className="border-t bg-secondary rounded-b-2xl flex flex-col sm:flex-row justify-between gap-4">
-              <Button className="font-semibold shadow-sm">Update Password</Button>
-              <Button variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive font-semibold">
+            <CardFooter className="border-t pt-4 flex flex-col sm:flex-row justify-between gap-4">
+              <Button>Update Password</Button>
+              <Button variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive">
                 <LogOut className="mr-2 h-4 w-4" /> Sign out everywhere
               </Button>
             </CardFooter>
