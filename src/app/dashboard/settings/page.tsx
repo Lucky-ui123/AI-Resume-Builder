@@ -42,7 +42,7 @@ export default async function SettingsPage() {
 
         <TabsContent value="general" className="space-y-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="bg-secondary border-b">
               <CardTitle>Profile Information</CardTitle>
               <CardDescription>Update your personal details visible to the system.</CardDescription>
             </CardHeader>
@@ -73,7 +73,7 @@ export default async function SettingsPage() {
                 </div>
               </div>
             </CardContent>
-            <CardFooter className="border-t pt-4">
+            <CardFooter className="bg-secondary border-t">
               <Button>Save Changes</Button>
             </CardFooter>
           </Card>
@@ -81,7 +81,7 @@ export default async function SettingsPage() {
 
         <TabsContent value="billing" className="space-y-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="bg-secondary border-b">
               <CardTitle>Current Plan</CardTitle>
               <CardDescription>Manage your subscription and billing cycle.</CardDescription>
             </CardHeader>
@@ -136,7 +136,7 @@ export default async function SettingsPage() {
           </Card>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="bg-secondary border-b">
               <CardTitle>Payment Method</CardTitle>
               <CardDescription>Update your credit card details.</CardDescription>
             </CardHeader>
@@ -157,7 +157,7 @@ export default async function SettingsPage() {
 
         <TabsContent value="notifications" className="space-y-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="bg-secondary border-b">
               <CardTitle>Email Notifications</CardTitle>
               <CardDescription>Choose what updates you want to receive.</CardDescription>
             </CardHeader>
@@ -179,7 +179,7 @@ export default async function SettingsPage() {
 
         <TabsContent value="security" className="space-y-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="bg-secondary border-b">
               <CardTitle>Security</CardTitle>
               <CardDescription>Manage your password and security settings.</CardDescription>
             </CardHeader>
@@ -197,7 +197,7 @@ export default async function SettingsPage() {
                 <Input type="password" placeholder="••••••••" />
               </div>
             </CardContent>
-            <CardFooter className="border-t pt-4 flex flex-col sm:flex-row justify-between gap-4">
+            <CardFooter className="bg-secondary border-t flex flex-col sm:flex-row justify-between gap-4">
               <Button>Update Password</Button>
               <Button variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive">
                 <LogOut className="mr-2 h-4 w-4" /> Sign out everywhere
