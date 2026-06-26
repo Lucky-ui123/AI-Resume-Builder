@@ -33,11 +33,11 @@ export default async function SettingsPage() {
       </div>
 
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="mb-8 bg-muted/50 p-1.5 border border-border/60 rounded-xl h-auto flex flex-wrap shadow-inner gap-1">
-          <TabsTrigger value="general" className="rounded-lg py-2.5 px-5 font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">General</TabsTrigger>
-          <TabsTrigger value="billing" className="rounded-lg py-2.5 px-5 font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">Billing & Plan</TabsTrigger>
-          <TabsTrigger value="notifications" className="rounded-lg py-2.5 px-5 font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">Notifications</TabsTrigger>
-          <TabsTrigger value="security" className="rounded-lg py-2.5 px-5 font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">Security</TabsTrigger>
+        <TabsList className="mb-8 bg-muted/50 p-2 border border-border/60 rounded-2xl h-auto flex flex-wrap gap-2">
+          <TabsTrigger value="general" className="rounded-xl py-3 px-6 text-base font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">General</TabsTrigger>
+          <TabsTrigger value="billing" className="rounded-xl py-3 px-6 text-base font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">Billing & Plan</TabsTrigger>
+          <TabsTrigger value="notifications" className="rounded-xl py-3 px-6 text-base font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">Notifications</TabsTrigger>
+          <TabsTrigger value="security" className="rounded-xl py-3 px-6 text-base font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">Security</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-6 focus-visible:outline-none focus-visible:ring-0">
@@ -54,7 +54,7 @@ export default async function SettingsPage() {
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <Button variant="outline" size="sm" className="mb-2 shadow-sm font-semibold border-border/50">Change Avatar</Button>
+                  <Button variant="outline" className="mb-2 h-11 px-6 shadow-sm font-semibold border-border/50 rounded-xl">Change Avatar</Button>
                   <p className="text-xs font-medium text-muted-foreground">JPG, GIF or PNG. 1MB max.</p>
                 </div>
               </div>
@@ -73,8 +73,8 @@ export default async function SettingsPage() {
                 </div>
               </div>
             </CardContent>
-            <CardFooter className="border-t bg-secondary rounded-b-2xl">
-              <Button className="font-semibold shadow-sm">Save Changes</Button>
+            <CardFooter className="border-t bg-secondary/50 rounded-b-2xl p-6">
+              <Button className="h-11 px-8 rounded-xl font-semibold shadow-sm">Save Changes</Button>
             </CardFooter>
           </Card>
         </TabsContent>
