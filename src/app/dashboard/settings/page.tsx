@@ -40,98 +40,94 @@ export default async function SettingsPage() {
           <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="space-y-6 focus-visible:outline-none focus-visible:ring-0">
-          <Card className="shadow-sm hover:shadow-md transition-shadow border-border rounded-2xl">
-            <CardHeader className="bg-secondary rounded-t-2xl border-b">
-              <CardTitle className="text-lg font-bold">Profile Information</CardTitle>
+        <TabsContent value="general" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Profile Information</CardTitle>
               <CardDescription>Update your personal details visible to the system.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center gap-6">
-                <Avatar className="h-24 w-24 border-4 border-background shadow-md">
+                <Avatar className="h-20 w-20">
                   <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
                     {userName.substring(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <div>
-                  <Button variant="outline" className="mb-2 h-11 px-6 shadow-sm font-semibold border-border/50 rounded-xl">Change Avatar</Button>
-                  <p className="text-xs font-medium text-muted-foreground">JPG, GIF or PNG. 1MB max.</p>
+                <div className="space-y-1">
+                  <Button variant="outline" size="sm">Change Avatar</Button>
+                  <p className="text-xs text-muted-foreground">JPG, GIF or PNG. 1MB max.</p>
                 </div>
               </div>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="space-y-2.5">
-                  <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">First Name</Label>
-                  <Input defaultValue={userName.split(' ')[0] || ''} className="h-11 shadow-sm font-medium" />
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>First Name</Label>
+                  <Input defaultValue={userName.split(' ')[0] || ''} />
                 </div>
-                <div className="space-y-2.5">
-                  <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Last Name</Label>
-                  <Input defaultValue={userName.split(' ').slice(1).join(' ') || ''} className="h-11 shadow-sm font-medium" />
+                <div className="space-y-2">
+                  <Label>Last Name</Label>
+                  <Input defaultValue={userName.split(' ').slice(1).join(' ') || ''} />
                 </div>
-                <div className="space-y-2.5 col-span-2">
-                  <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Email Address</Label>
-                  <Input defaultValue={userEmail} type="email" className="h-11 shadow-sm font-medium" />
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Email Address</Label>
+                  <Input defaultValue={userEmail} type="email" />
                 </div>
               </div>
             </CardContent>
-            <CardFooter className="border-t bg-secondary/50 rounded-b-2xl p-6">
-              <Button className="h-11 px-8 rounded-xl font-semibold shadow-sm">Save Changes</Button>
+            <CardFooter className="border-t pt-4">
+              <Button>Save Changes</Button>
             </CardFooter>
           </Card>
         </TabsContent>
 
-        <TabsContent value="billing" className="space-y-6 focus-visible:outline-none focus-visible:ring-0">
-          <Card className="shadow-sm hover:shadow-md transition-shadow border-border rounded-2xl">
-            <CardHeader className="bg-secondary rounded-t-2xl border-b">
-              <CardTitle className="text-lg font-bold">Current Plan</CardTitle>
+        <TabsContent value="billing" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Current Plan</CardTitle>
               <CardDescription>Manage your subscription and billing cycle.</CardDescription>
             </CardHeader>
-            <CardContent className="pt-2">
-              <div className="p-6 border border-accent/20 rounded-xl bg-gradient-to-r from-accent/10 to-transparent flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 rounded-full blur-2xl pointer-events-none" />
-                <div className="relative z-10 w-full md:w-auto">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-2xl font-black tracking-tight capitalize">{plan} Plan</h3>
-                    <Badge variant="secondary" className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold uppercase tracking-wider text-[10px] px-2.5 py-0.5">Active</Badge>
+            <CardContent className="space-y-6">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-4 rounded-xl border bg-muted/30">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-bold capitalize">{plan} Plan</h3>
+                    <Badge variant="secondary" className="font-semibold">Active</Badge>
                   </div>
-                  <p className="text-sm font-medium text-muted-foreground/80">
+                  <p className="text-sm text-muted-foreground">
                     {plan === 'free' ? 'You are currently on the free plan.' : 'Next billing date is July 24, 2026.'}
                   </p>
                 </div>
-                <div className="flex gap-3 w-full md:w-auto relative z-10">
-                  {plan !== 'free' && <Button variant="outline" className="w-full md:w-auto font-semibold shadow-sm border-border/50">Cancel Plan</Button>}
+                <div className="flex gap-2">
+                  {plan !== 'free' && <Button variant="outline" size="sm">Cancel Plan</Button>}
                   {plan !== 'premium' && (
-                    <Link href="/pricing" className={buttonVariants({ className: "w-full md:w-auto font-semibold shadow-sm" })}>
-                      Upgrade Plan
+                    <Link href="/pricing">
+                      <Button size="sm">Upgrade Plan</Button>
                     </Link>
                   )}
                 </div>
               </div>
 
-              <div className="mt-6 space-y-6">
-                <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                   <Activity className="h-4 w-4" /> Current Usage
                 </h4>
-                
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm font-semibold">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm font-medium">
                     <span>Resumes</span>
-                    <span>{totalResumes} / {limits.resumes === Infinity ? 'Unlimited' : limits.resumes}</span>
+                    <span className="text-muted-foreground">{totalResumes} / {limits.resumes === Infinity ? 'Unlimited' : limits.resumes}</span>
                   </div>
                   <Progress value={resumesPercent} className="h-2" />
                 </div>
-
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm font-semibold">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm font-medium">
                     <span>AI Actions</span>
-                    <span>{aiUsageCount} / {limits.aiActionsPerMonth === Infinity ? 'Unlimited' : limits.aiActionsPerMonth}</span>
+                    <span className="text-muted-foreground">{aiUsageCount} / {limits.aiActionsPerMonth === Infinity ? 'Unlimited' : limits.aiActionsPerMonth}</span>
                   </div>
                   <Progress value={aiPercent} className="h-2" />
                 </div>
-
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm font-semibold">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm font-medium">
                     <span>Exports</span>
-                    <span>{exportUsageCount} / {limits.exportsPerMonth === Infinity ? 'Unlimited' : limits.exportsPerMonth}</span>
+                    <span className="text-muted-foreground">{exportUsageCount} / {limits.exportsPerMonth === Infinity ? 'Unlimited' : limits.exportsPerMonth}</span>
                   </div>
                   <Progress value={exportPercent} className="h-2" />
                 </div>
@@ -139,21 +135,21 @@ export default async function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm hover:shadow-md transition-shadow border-border rounded-2xl">
-            <CardHeader className="bg-secondary rounded-t-2xl border-b">
-              <CardTitle className="text-lg font-bold">Payment Method</CardTitle>
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment Method</CardTitle>
               <CardDescription>Update your credit card details.</CardDescription>
             </CardHeader>
-            <CardContent className="pt-2">
-              <div className="flex items-center gap-5 p-5 border border-border/50 rounded-xl hover:border-primary/30 transition-colors bg-background">
-                <div className="bg-muted p-3 rounded-lg border border-border/50 shadow-sm">
-                  <CreditCard className="h-6 w-6 text-foreground/70" />
+            <CardContent>
+              <div className="flex items-center gap-4 p-4 rounded-xl border bg-muted/30">
+                <div className="bg-background p-3 rounded-lg border">
+                  <CreditCard className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div className="flex-1">
-                  <p className="font-bold text-[15px]">Visa ending in 4242</p>
-                  <p className="text-sm font-medium text-muted-foreground">Expires 12/28</p>
+                  <p className="font-semibold text-sm">Visa ending in 4242</p>
+                  <p className="text-xs text-muted-foreground">Expires 12/28</p>
                 </div>
-                <Button variant="outline" size="sm" className="font-semibold shadow-sm border-border/50">Edit</Button>
+                <Button variant="outline" size="sm">Edit</Button>
               </div>
             </CardContent>
           </Card>
