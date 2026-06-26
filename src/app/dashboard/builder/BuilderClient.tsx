@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,45 +12,189 @@ import {
   AccordionItem, 
   AccordionTrigger 
 } from '@/components/ui/accordion';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sparkles, Save, Eye, LayoutPanelLeft, Check, X, Loader2, History, FileEdit, Trash2, Plus } from 'lucide-react';
+import { Sparkles, Save, Eye, LayoutPanelLeft, Check, X, Loader2, History, FileEdit, Trash2, Plus, Palette, LayoutTemplate, WifiOff, AlertCircle, Clock } from 'lucide-react';
 import { emptyResume, mockResume } from '@/lib/mock-data';
 import { saveResumeAction, saveResumeVersionAction } from './actions';
 import { Resume, Skill } from '@/types';
 import { ResumePreview } from '@/components/resume/ResumePreview';
+import { showSuccess, showError, showLoading, dismissToast } from '@/lib/toast';
+import { templates } from '@/lib/templates';
+import { TemplateMiniPreview } from '@/components/resume/TemplateMiniPreview';
+
+type SaveState = 'clean' | 'editing' | 'saving' | 'saved' | 'error' | 'offline';
 
 export default function BuilderClient({ initialResume }: { initialResume: Resume | null }) {
   const router = useRouter();
   const [resume, setResume] = useState<Resume>(initialResume || emptyResume);
   const [showPreviewMobile, setShowPreviewMobile] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState('');
+  
+  const [saveState, setSaveState] = useState<SaveState>('clean');
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [hasUnsyncedChanges, setHasUnsyncedChanges] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  
+  const initialLoadDone = useRef(false);
+  const latestState = useRef({ resume, saveState });
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load from local storage if exists and unsaved
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const draftStr = localStorage.getItem(`hirecraft_draft_${initialResume?.id || 'new'}`);
+    if (draftStr) {
+      try {
+        const draft = JSON.parse(draftStr);
+        if (draft && draft.title) {
+          setHasUnsyncedChanges(true);
+        }
+      } catch (e) {
+        console.error('Failed to parse local draft', e);
+      }
+    }
+    initialLoadDone.current = true;
+  }, [initialResume]);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isOnline && saveState !== 'clean') {
+      setSaveState('offline');
+    } else if (isOnline && saveState === 'offline') {
+      setSaveState('editing'); // Trigger a save on reconnect
+    }
+  }, [isOnline]);
+
+  useEffect(() => {
+    latestState.current = { resume, saveState };
+  }, [resume, saveState]);
+
+  // Robust Unload Prevention
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const state = latestState.current.saveState;
+      if (state === 'editing' || state === 'saving' || state === 'error' || state === 'offline') {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  // Save when component unmounts for Next.js soft navigation
+  useEffect(() => {
+    return () => {
+      const { resume: r, saveState: s } = latestState.current;
+      if ((s === 'editing' || s === 'error' || s === 'offline') && r.id && r.id !== 'res_123') {
+        saveResumeAction({ 
+          ...r, 
+          isDraft: r.isDraft !== false 
+        }).catch(console.error);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!initialLoadDone.current) return;
+    
+    // Prevent saving if we just loaded or explicitly set clean
+    if (saveState === 'clean' || saveState === 'saved') {
+      // But if resume changed, we enter editing state
+      setSaveState('editing');
+    }
+    
+    // Save locally immediately
+    const draftKey = `hirecraft_draft_${resume.id || 'new'}`;
+    localStorage.setItem(draftKey, JSON.stringify(resume));
+
+    if (!isOnline) {
+      setSaveState('offline');
+      return;
+    }
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    
+    saveTimeoutRef.current = setTimeout(async () => {
+      setSaveState('saving');
+      try {
+        const isDraftStatus = resume.isDraft !== false;
+        const { id, error } = await saveResumeAction({ ...resume, isDraft: isDraftStatus });
+        if (!error && id) {
+          if (!resume.id || resume.id === 'res_123') {
+            router.replace('/dashboard/builder?id=' + id);
+            setResume(prev => ({ ...prev, id, isDraft: isDraftStatus }));
+          }
+          setLastSaved(new Date());
+          setSaveState('saved');
+          localStorage.removeItem(draftKey);
+          setHasUnsyncedChanges(false);
+        } else {
+          setSaveState('error');
+        }
+      } catch (err) {
+        console.error('Auto-save failed', err);
+        setSaveState('error');
+      }
+    }, 1000);
+    
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [resume, router, isOnline]);
   
   const handleSave = async () => {
-    setIsSaving(true);
-    const { id, error } = await saveResumeAction(resume);
-    if (!error && id) {
-      if (!resume.id) {
-        router.replace('/dashboard/builder?id=' + id);
+    setSaveState('saving');
+    const loadingId = showLoading('Saving changes...');
+    try {
+      const { id, error } = await saveResumeAction({ ...resume, isDraft: false });
+      dismissToast(loadingId);
+      if (!error && id) {
+        setResume({ ...resume, id, isDraft: false });
+        setSaveState('saved');
+        setLastSaved(new Date());
+        localStorage.removeItem(`hirecraft_draft_${resume.id || 'new'}`);
+        setHasUnsyncedChanges(false);
+        showSuccess('Changes saved successfully');
+        
+        // Redirect to My Resumes page
+        router.push('/dashboard/resumes');
+      } else {
+        setSaveState('error');
+        showError(error || "Couldn't save your resume. Please try again.");
       }
-      setResume({ ...resume, id });
-      setSaveMessage('Saved successfully');
-      setTimeout(() => setSaveMessage(''), 3000);
-    } else {
-      setSaveMessage(error || 'Failed to save');
-      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (err) {
+      dismissToast(loadingId);
+      setSaveState('error');
+      showError('Something went wrong.');
     }
-    setIsSaving(false);
   };
 
   const handleSaveVersion = async () => {
     if (!resume.id || resume.id === 'res_123') return;
-    setIsSaving(true);
-    const name = `Version ${new Date().toLocaleDateString()}`;
-    await saveResumeVersionAction(resume.id, name, resume);
-    setSaveMessage('Version saved');
-    setTimeout(() => setSaveMessage(''), 3000);
-    setIsSaving(false);
+    setSaveState('saving');
+    const loadingId = showLoading('Saving version...');
+    try {
+      const name = `Version ${new Date().toLocaleDateString()}`;
+      await saveResumeVersionAction(resume.id, name, resume);
+      dismissToast(loadingId);
+      showSuccess('Version saved successfully');
+      setSaveState('saved');
+    } catch (err) {
+      dismissToast(loadingId);
+      setSaveState('error');
+      showError("Couldn't save version.");
+    }
   };
   
   // AI States
@@ -61,6 +205,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
 
   const handleImproveSummary = async () => {
     setIsImprovingSummary(true);
+    const loadingId = showLoading('Generating AI content...');
     try {
       const res = await fetch('/api/ai/improve-summary', {
         method: 'POST',
@@ -68,8 +213,16 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
         body: JSON.stringify({ summary: resume.summary })
       });
       const data = await res.json();
-      if (data.result) setSummarySuggestion(data.result);
+      dismissToast(loadingId);
+      if (data.result) {
+        setSummarySuggestion(data.result);
+        showSuccess('AI content generated successfully');
+      } else {
+        showError(data.error || "AI couldn't generate content. Please try again.");
+      }
     } catch (err) {
+      dismissToast(loadingId);
+      showError("AI couldn't generate content. Please try again.");
       console.error(err);
     } finally {
       setIsImprovingSummary(false);
@@ -78,6 +231,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
 
   const handleImproveExp = async (expId: string, role: string, company: string, description: string) => {
     setImprovingExpId(expId);
+    const loadingId = showLoading('Generating AI content...');
     try {
       const res = await fetch('/api/ai/improve-experience', {
         method: 'POST',
@@ -85,10 +239,16 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
         body: JSON.stringify({ role, company, description })
       });
       const data = await res.json();
+      dismissToast(loadingId);
       if (data.result) {
         setExpSuggestions(prev => ({ ...prev, [expId]: data.result }));
+        showSuccess('AI content generated successfully');
+      } else {
+        showError(data.error || "AI couldn't generate content. Please try again.");
       }
     } catch (err) {
+      dismissToast(loadingId);
+      showError("AI couldn't generate content. Please try again.");
       console.error(err);
     } finally {
       setImprovingExpId(null);
@@ -118,6 +278,34 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-muted/10 font-sans relative">
+      {/* Recovery Banner */}
+      {hasUnsyncedChanges && (
+        <div className="bg-orange-500/10 border-b border-orange-500/20 px-4 py-3 flex items-center justify-between z-20 shrink-0">
+          <div className="flex items-center text-orange-600 dark:text-orange-400 text-sm font-medium">
+            <AlertCircle className="h-4 w-4 mr-2" />
+            You have unsaved changes from a previous session.
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="h-8 border-orange-500/20 hover:bg-orange-500/10 text-orange-600" onClick={() => {
+              const draftStr = localStorage.getItem(`hirecraft_draft_${resume.id || 'new'}`);
+              if (draftStr) {
+                setResume(JSON.parse(draftStr));
+                setSaveState('editing');
+              }
+              setHasUnsyncedChanges(false);
+            }}>
+              Restore
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:bg-muted" onClick={() => {
+              localStorage.removeItem(`hirecraft_draft_${resume.id || 'new'}`);
+              setHasUnsyncedChanges(false);
+            }}>
+              Discard
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Builder Header */}
       <div className="p-4 md:p-8 w-full shrink-0">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -136,18 +324,29 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
               {showPreviewMobile ? 'Edit' : 'Preview'}
             </Button>
             <div className="flex items-center gap-2">
-              {(!resume.id || resume.id === '') && (
-                <Button variant="outline" className="shadow-sm font-semibold border-primary/50 text-primary" onClick={() => setResume({ ...mockResume, id: resume.id, title: 'AI Generated Resume' })}>
-                  <Sparkles className="mr-2 h-4 w-4" /> Auto-Fill Dummy
-                </Button>
-              )}
-              {saveMessage && <span className="text-sm text-success font-medium mr-2">{saveMessage}</span>}
-              <Button variant="outline" className="shadow-sm font-semibold border-border/50" onClick={handleSaveVersion} disabled={isSaving || !resume.id || resume.id === 'res_123'}>
+              <Button variant="outline" className="shadow-sm font-semibold border-primary/50 text-primary" onClick={() => {
+                setResume({ ...mockResume, id: resume.id, title: 'AI Generated Resume' });
+                showSuccess('Template auto-filled');
+              }}>
+                <Sparkles className="mr-2 h-4 w-4" /> Auto-Fill
+              </Button>
+              <Button variant="outline" className="shadow-sm font-semibold border-border/50" onClick={handleSaveVersion} disabled={saveState === 'saving' || !resume.id || resume.id === 'res_123'}>
                 <History className="mr-2 h-4 w-4" /> Save Version
               </Button>
-              <Button className="hidden md:flex shadow-sm font-semibold" onClick={handleSave} disabled={isSaving}>
-                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Save Resume
+              <div className="flex flex-col items-end mr-2 text-xs font-medium w-[110px]">
+                {saveState === 'offline' && <span className="flex items-center text-orange-500"><WifiOff className="mr-1 h-3 w-3" /> Offline</span>}
+                {saveState === 'error' && <span className="flex items-center text-red-500"><AlertCircle className="mr-1 h-3 w-3" /> Save failed</span>}
+                {saveState === 'saving' && <span className="flex items-center text-primary"><Loader2 className="mr-1 h-3 w-3 animate-spin" /> Saving...</span>}
+                {saveState === 'editing' && <span className="flex items-center text-muted-foreground"><Clock className="mr-1 h-3 w-3" /> Unsaved changes</span>}
+                {(saveState === 'saved' || saveState === 'clean') && (
+                  <span className="flex items-center text-green-600">
+                    <Check className="mr-1 h-3 w-3" /> {resume.isDraft ? 'Draft Saved' : 'Saved'}
+                  </span>
+                )}
+              </div>
+              <Button className="hidden md:flex shadow-sm font-semibold" onClick={handleSave} disabled={saveState === 'saving' || saveState === 'clean' || saveState === 'saved'}>
+                {saveState === 'saving' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                Save & Exit
               </Button>
             </div>
           </div>
@@ -158,18 +357,32 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
       <div className="flex flex-1 overflow-hidden relative">
         {/* Editor Panel */}
         <div className={`w-full md:w-1/2 flex-col bg-background z-10 ${showPreviewMobile ? 'hidden' : 'flex'}`}>
-          <div className="p-4 md:p-6 border-b flex justify-between items-center bg-background/95 sticky top-0 z-10">
-            <h2 className="text-base font-semibold tracking-tight">Resume Content</h2>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-20 md:pb-6 custom-scrollbar">
-            <Accordion defaultValue={["personalInfo", "summary", "experience"]} className="w-full mt-2">
+          <Tabs defaultValue="content" className="flex flex-col h-full w-full">
+            <div className="p-4 md:p-6 border-b flex justify-between items-center bg-background/95 sticky top-0 z-10">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="content"><FileEdit className="w-4 h-4 mr-2"/>Content</TabsTrigger>
+                <TabsTrigger value="templates"><LayoutTemplate className="w-4 h-4 mr-2"/>Templates</TabsTrigger>
+                <TabsTrigger value="theme"><Palette className="w-4 h-4 mr-2"/>Theme</TabsTrigger>
+              </TabsList>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-20 md:pb-6 custom-scrollbar">
+              <TabsContent value="content" className="mt-0">
+                <Accordion defaultValue={["personalInfo", "summary", "experience"]} className="w-full mt-2">
 
-              {/* Personal Information */}
-              <AccordionItem value="personalInfo" className="border-b-0 mb-3 bg-card rounded-lg border border-border px-5 shadow-sm">
+                  {/* Personal Information */}
+                  <AccordionItem value="personalInfo" className="border-b-0 mb-3 bg-card rounded-lg border border-border px-5 shadow-sm">
                 <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3">Personal Information</AccordionTrigger>
                 <AccordionContent className="space-y-4 pt-1 pb-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Resume Title (Internal Reference)</Label>
+                      <Input value={resume.title} onChange={(e) => setResume({ ...resume, title: e.target.value })} placeholder="e.g. Software Engineer Resume" />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Target Role</Label>
+                      <Input value={resume.targetRole || ''} onChange={(e) => setResume({ ...resume, targetRole: e.target.value })} placeholder="e.g. Frontend Developer" />
+                    </div>
                     <div className="space-y-2">
                       <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">First Name</Label>
                       <Input value={resume.personalInfo.firstName} onChange={(e) => setResume({ ...resume, personalInfo: { ...resume.personalInfo, firstName: e.target.value } })} />
@@ -832,8 +1045,82 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
                 </AccordionContent>
               </AccordionItem>
 
-            </Accordion>
-          </div>
+                </Accordion>
+              </TabsContent>
+              <TabsContent value="templates" className="mt-0 space-y-4">
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  {templates.map(template => (
+                    <div 
+                      key={template.id}
+                      onClick={() => setResume({ ...resume, templateId: template.id })}
+                      className={`cursor-pointer rounded-xl border p-2 transition-all duration-200 ${resume.templateId === template.id ? 'ring-2 ring-primary border-primary bg-primary/5' : 'hover:border-primary/50 bg-card'}`}
+                    >
+                      <div className="aspect-[1/1.2] bg-slate-50 rounded-md mb-2 flex items-center justify-center border relative overflow-hidden group">
+                        {resume.templateId === template.id && (
+                          <div className="absolute top-2 right-2 bg-primary text-primary-foreground p-1 rounded-full shadow-sm z-10">
+                            <Check className="h-3 w-3" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none" />
+                        <TemplateMiniPreview templateId={template.id} />
+                      </div>
+                      <h4 className="font-semibold text-sm truncate">{template.name}</h4>
+                      <p className="text-xs text-muted-foreground truncate">{template.category[1] || template.category[0]}</p>
+                    </div>
+                  ))}
+                </div>
+              </TabsContent>
+              <TabsContent value="theme" className="mt-0 space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-base font-semibold">Primary Color</Label>
+                    <p className="text-sm text-muted-foreground mb-3">Choose a color for headings and accents.</p>
+                    <div className="flex flex-wrap gap-3">
+                      {['#0f172a', '#2563eb', '#16a34a', '#dc2626', '#9333ea', '#ea580c', '#0891b2'].map(color => (
+                        <div 
+                          key={color}
+                          onClick={() => setResume({ 
+                            ...resume, 
+                            theme: { ...resume.theme, primaryColor: color } as any 
+                          })}
+                          className={`w-10 h-10 rounded-full cursor-pointer flex items-center justify-center transition-all ${resume.theme?.primaryColor === color ? 'ring-2 ring-offset-2 ring-primary' : 'hover:scale-110'}`}
+                          style={{ backgroundColor: color }}
+                        >
+                          {resume.theme?.primaryColor === color && <Check className="w-5 h-5 text-white" />}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="pt-4 border-t border-border">
+                    <Label className="text-base font-semibold">Typography</Label>
+                    <p className="text-sm text-muted-foreground mb-3">Select the main font family.</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { id: 'Inter, sans-serif', name: 'Inter (Sans)' },
+                        { id: 'Merriweather, serif', name: 'Merriweather (Serif)' },
+                        { id: 'Roboto Mono, monospace', name: 'Roboto Mono' },
+                        { id: 'system-ui, sans-serif', name: 'System Default' }
+                      ].map(font => (
+                        <div 
+                          key={font.id}
+                          onClick={() => setResume({ 
+                            ...resume, 
+                            theme: { ...resume.theme, fontFamily: font.id } as any 
+                          })}
+                          className={`cursor-pointer rounded-lg border p-3 flex items-center justify-between ${resume.theme?.fontFamily === font.id ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:border-primary/50'}`}
+                          style={{ fontFamily: font.id }}
+                        >
+                          <span className="text-sm font-medium">{font.name}</span>
+                          {resume.theme?.fontFamily === font.id && <Check className="w-4 h-4 text-primary" />}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+            </div>
+          </Tabs>
         </div>
 
         {/* Live Preview Panel */}

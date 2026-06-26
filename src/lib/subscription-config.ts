@@ -13,7 +13,7 @@ export interface PlanLimits {
 export const SUBSCRIPTION_PLANS: Record<PlanType, PlanLimits> = {
   free: {
     resumes: 1,
-    aiActionsPerMonth: 3,
+    aiActionsPerMonth: 50,
     exportsPerMonth: 1,
     hasAdvancedTemplates: false,
     hasCoverLetter: false,

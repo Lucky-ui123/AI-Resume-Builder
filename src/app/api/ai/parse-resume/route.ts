@@ -132,7 +132,7 @@ Rules:
     const finalResume = {
       id: `res_${Date.now()}`,
       title: 'Parsed Resume',
-      templateId: 'tpl_classic',
+      templateId: 'classic-ats',
       ...structuredResume
     };
 

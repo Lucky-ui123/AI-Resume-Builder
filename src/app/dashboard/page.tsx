@@ -1,9 +1,10 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { FileText, Target, Plus, ArrowRight, TrendingUp, Briefcase, Sparkles } from 'lucide-react';
+import { FileText, Target, ArrowRight, TrendingUp, Briefcase } from 'lucide-react';
 import Link from 'next/link';
 import { getDashboardStats, getUserSubscription, getAllResumes } from '@/lib/db-service';
+import { CreateResumeDialog } from '@/components/dashboard/CreateResumeDialog';
 
 export default async function DashboardPage() {
   const stats = await getDashboardStats();
@@ -26,11 +27,7 @@ export default async function DashboardPage() {
           <Link href="/dashboard/matcher">
             <Button variant="outline">Match Job</Button>
           </Link>
-          <Link href="/dashboard/builder">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" /> Create Resume
-            </Button>
-          </Link>
+          <CreateResumeDialog />
         </div>
       </div>
 
@@ -103,7 +100,12 @@ export default async function DashboardPage() {
                       <FileText className="h-5 w-5 text-foreground" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium leading-none mb-1">{resume.title || 'Untitled Resume'}</p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-medium leading-none">{resume.title || 'Untitled Resume'}</p>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${resume.isDraft ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'}`}>
+                          {resume.isDraft ? 'Draft' : 'Saved'}
+                        </span>
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         {resume.targetRole ? `${resume.targetRole} • ` : ''} 
                         Updated {resume.lastModified ? new Date(resume.lastModified).toLocaleDateString() : 'recently'}
@@ -111,7 +113,7 @@ export default async function DashboardPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <Link href={`/dashboard/builder/${resume.id}`}>
+                    <Link href={`/dashboard/builder?id=${resume.id}`}>
                       <Button type="button" variant="ghost" className="h-10 w-10 p-0">
                         <ArrowRight className="h-4 w-4" />
                       </Button>

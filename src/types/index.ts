@@ -5,13 +5,23 @@ export interface User {
   avatarUrl?: string;
 }
 
+export interface ThemeConfig {
+  primaryColor: string;
+  secondaryColor?: string;
+  fontFamily: string;
+  fontSize: 'small' | 'medium' | 'large';
+  spacing: 'compact' | 'normal' | 'relaxed';
+}
+
 export interface Resume {
   id: string;
   userId: string;
   title: string;
   targetRole: string;
   templateId: string;
+  theme?: ThemeConfig;
   lastModified: string;
+  isDraft?: boolean;
   personalInfo: PersonalInfo;
   summary: string;
   experience: WorkExperience[];

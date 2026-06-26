@@ -20,7 +20,13 @@ export const mockResume: Resume = {
   userId: 'usr_123',
   title: 'Senior Frontend Developer Resume',
   targetRole: 'Senior Frontend Developer',
-  templateId: 'tpl_modern',
+  templateId: 'modern-professional',
+  theme: {
+    primaryColor: '#0f172a',
+    fontFamily: 'Inter, sans-serif',
+    fontSize: 'medium',
+    spacing: 'normal',
+  },
   lastModified: new Date().toISOString(),
   personalInfo: {
     firstName: 'Alex',
@@ -174,7 +180,7 @@ export const mockResumes: Resume[] = [
     id: 'res_456',
     title: 'Product Designer Resume',
     targetRole: 'Product Designer',
-    templateId: 'tpl_designer',
+    templateId: 'product-designer',
     lastModified: new Date(Date.now() - 86400000).toISOString(),
   }
 ];
@@ -184,7 +190,13 @@ export const emptyResume: Resume = {
   userId: '',
   title: 'Untitled Resume',
   targetRole: '',
-  templateId: 'tpl_classic',
+  templateId: 'classic-ats',
+  theme: {
+    primaryColor: '#0f172a',
+    fontFamily: 'Inter, sans-serif',
+    fontSize: 'medium',
+    spacing: 'normal',
+  },
   lastModified: new Date().toISOString(),
   personalInfo: {
     firstName: '',

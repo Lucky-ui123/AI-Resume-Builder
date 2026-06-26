@@ -247,7 +247,7 @@ export default function ExportClient({ hasAdvancedTemplates, resume }: { hasAdva
       {/* Hidden Resume Preview for PDF Generation */}
       <div className="absolute top-0 left-0 w-0 h-0 overflow-hidden pointer-events-none opacity-0 -z-50">
         <div id="resume-export-preview">
-          <ResumePreview resume={resume} layout={layout} />
+          <ResumePreview resume={resume} />
         </div>
       </div>
       </div>

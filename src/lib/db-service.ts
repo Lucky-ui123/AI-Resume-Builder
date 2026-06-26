@@ -270,7 +270,7 @@ export async function saveResume(resume: Resume): Promise<{ id: string; error: s
     user_id: user.id,
     title: title || 'Untitled Resume',
     target_role: targetRole || '',
-    template_id: templateId || 'tpl_classic',
+    template_id: templateId || 'classic-ats',
     content: content,
   };
 

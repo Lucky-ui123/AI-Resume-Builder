@@ -30,6 +30,7 @@ import {
 } from './actions';
 import { getResumeVersionsAction, saveResumeVersionAction } from '../builder/actions';
 import { formatDistanceToNow } from 'date-fns';
+import { showSuccess, showError, showLoading, dismissToast } from '@/lib/toast';
 
 interface ResumesClientProps {
   initialResumes: Resume[];
@@ -81,13 +82,23 @@ export default function ResumesClient({ initialResumes }: ResumesClientProps) {
   const submitRename = async () => {
     if (!activeResume || !newTitle.trim()) return;
     setIsProcessing(true);
-    await renameResumeAction(activeResume.id, newTitle);
-    
-    // Update local state for immediate feedback
-    setResumes(resumes.map(r => r.id === activeResume.id ? { ...r, title: newTitle } : r));
-    
-    setRenameDialogOpen(false);
-    setIsProcessing(false);
+    const toastId = showLoading('Renaming resume...');
+    try {
+      const result = await renameResumeAction(activeResume.id, newTitle);
+      if (result?.error) throw new Error(result.error);
+      
+      // Update local state for immediate feedback
+      setResumes(resumes.map(r => r.id === activeResume.id ? { ...r, title: newTitle } : r));
+      
+      setRenameDialogOpen(false);
+      showSuccess('Resume renamed successfully');
+    } catch (error) {
+      console.error('Rename error:', error);
+      showError(error instanceof Error ? error.message : 'Failed to rename resume');
+    } finally {
+      dismissToast(toastId);
+      setIsProcessing(false);
+    }
   };
 
   const openDeleteDialog = (resume: Resume) => {
@@ -98,22 +109,43 @@ export default function ResumesClient({ initialResumes }: ResumesClientProps) {
   const submitDelete = async () => {
     if (!activeResume) return;
     setIsProcessing(true);
-    await deleteResumeAction(activeResume.id);
-    
-    setResumes(resumes.filter(r => r.id !== activeResume.id));
-    
-    setDeleteDialogOpen(false);
-    setIsProcessing(false);
+    const toastId = showLoading('Deleting resume...');
+    try {
+      const result = await deleteResumeAction(activeResume.id);
+      if (result?.error) throw new Error(result.error);
+      
+      setResumes(resumes.filter(r => r.id !== activeResume.id));
+      
+      setDeleteDialogOpen(false);
+      showSuccess('Resume deleted successfully');
+    } catch (error) {
+      console.error('Delete error:', error);
+      showError(error instanceof Error ? error.message : 'Failed to delete resume');
+    } finally {
+      dismissToast(toastId);
+      setIsProcessing(false);
+    }
   };
 
   const handleDuplicate = async (resume: Resume) => {
     setIsProcessing(true);
-    const result = await duplicateResumeAction(resume.id);
-    if (result.newId) {
-      // Optimistically reload page to get new data
-      router.refresh();
+    const toastId = showLoading('Duplicating resume...');
+    try {
+      const result = await duplicateResumeAction(resume.id);
+      if (result?.newId) {
+        // Optimistically reload page to get new data
+        router.refresh();
+        showSuccess('Resume duplicated successfully');
+      } else if (result?.error) {
+        showError(result.error);
+      }
+    } catch (error) {
+      console.error('Duplicate error:', error);
+      showError(error instanceof Error ? error.message : 'Failed to duplicate resume');
+    } finally {
+      dismissToast(toastId);
+      setIsProcessing(false);
     }
-    setIsProcessing(false);
   };
 
   const openNewVersionDialog = (resume: Resume) => {
@@ -125,34 +157,70 @@ export default function ResumesClient({ initialResumes }: ResumesClientProps) {
   const submitNewVersion = async () => {
     if (!activeResume || !versionName.trim()) return;
     setIsProcessing(true);
-    await saveResumeVersionAction(activeResume.id, versionName, activeResume);
-    setNewVersionDialogOpen(false);
-    setIsProcessing(false);
+    const toastId = showLoading('Saving new version...');
+    try {
+      const result = await saveResumeVersionAction(activeResume.id, versionName, activeResume);
+      if (result?.error) throw new Error(result.error);
+      setNewVersionDialogOpen(false);
+      showSuccess('Version saved successfully');
+    } catch (error) {
+      console.error('Save version error:', error);
+      showError(error instanceof Error ? error.message : 'Failed to save version');
+    } finally {
+      dismissToast(toastId);
+      setIsProcessing(false);
+    }
   };
 
   const openVersionsDrawer = async (resume: Resume) => {
     setActiveResume(resume);
     setVersionsDrawerOpen(true);
     setIsLoadingVersions(true);
-    const data = await getResumeVersionsAction(resume.id);
-    setVersions(data || []);
-    setIsLoadingVersions(false);
+    try {
+      const data = await getResumeVersionsAction(resume.id);
+      setVersions(data || []);
+    } catch (error) {
+      console.error('Load versions error:', error);
+      showError('Failed to load version history');
+    } finally {
+      setIsLoadingVersions(false);
+    }
   };
 
   const handleRestoreVersion = async (versionId: string) => {
     if (!activeResume) return;
     setIsProcessing(true);
-    await restoreVersionAction(activeResume.id, versionId);
-    router.refresh(); // Refresh page to get latest content
-    setVersionsDrawerOpen(false);
-    setIsProcessing(false);
+    const toastId = showLoading('Restoring version...');
+    try {
+      const result = await restoreVersionAction(activeResume.id, versionId);
+      if (result?.error) throw new Error(result.error);
+      router.refresh(); // Refresh page to get latest content
+      setVersionsDrawerOpen(false);
+      showSuccess('Version restored successfully');
+    } catch (error) {
+      console.error('Restore version error:', error);
+      showError(error instanceof Error ? error.message : 'Failed to restore version');
+    } finally {
+      dismissToast(toastId);
+      setIsProcessing(false);
+    }
   };
 
   const handleDeleteVersion = async (versionId: string) => {
     setIsProcessing(true);
-    await deleteVersionAction(versionId);
-    setVersions(versions.filter(v => v.id !== versionId));
-    setIsProcessing(false);
+    const toastId = showLoading('Deleting version...');
+    try {
+      const result = await deleteVersionAction(versionId);
+      if (result?.error) throw new Error(result.error);
+      setVersions(versions.filter(v => v.id !== versionId));
+      showSuccess('Version deleted successfully');
+    } catch (error) {
+      console.error('Delete version error:', error);
+      showError(error instanceof Error ? error.message : 'Failed to delete version');
+    } finally {
+      dismissToast(toastId);
+      setIsProcessing(false);
+    }
   };
 
   if (resumes.length === 0) {
@@ -256,8 +324,11 @@ export default function ResumesClient({ initialResumes }: ResumesClientProps) {
               <div className="w-10 h-10 rounded-2xl bg-background border border-border flex items-center justify-center mb-3 text-foreground">
                 <FileText className="h-5 w-5" />
               </div>
-              <CardTitle className="text-lg truncate pr-8" title={resume.title || 'Untitled'}>
+              <CardTitle className="text-lg truncate pr-8 flex items-center gap-2" title={resume.title || 'Untitled'}>
                 {resume.title || 'Untitled'}
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${resume.isDraft ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'}`}>
+                  {resume.isDraft ? 'Draft' : 'Saved'}
+                </span>
               </CardTitle>
               <CardDescription className="flex items-center mt-1">
                 <Target className="h-3.5 w-3.5 mr-1" />

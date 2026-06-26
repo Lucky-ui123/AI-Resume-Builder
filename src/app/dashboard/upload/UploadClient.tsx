@@ -10,6 +10,7 @@ import { UploadCloud, FileType, CheckCircle2, XCircle, Loader2, Edit3, AlertCirc
 import { useRouter } from 'next/navigation';
 import { saveResumeAction } from '../builder/actions';
 import { Resume } from '@/types';
+import { showSuccess, showError, showLoading, dismissToast } from '@/lib/toast';
 
 type ConfidenceScores = {
   personalInfo: number;
@@ -73,11 +74,15 @@ export function UploadClient() {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ];
     if (!validTypes.includes(selectedFile.type) && !selectedFile.name.endsWith('.docx')) {
-      setErrorMessage('Unsupported file type. Please upload a PDF or DOCX file.');
+      const msg = 'Unsupported file type. Please upload a PDF or DOCX file.';
+      setErrorMessage(msg);
+      showError(msg);
       return false;
     }
     if (selectedFile.size > 5 * 1024 * 1024) {
-      setErrorMessage('File is too large. Maximum size is 5MB.');
+      const msg = 'File is too large. Maximum size is 5MB.';
+      setErrorMessage(msg);
+      showError(msg);
       return false;
     }
     setErrorMessage('');
@@ -108,7 +113,7 @@ export function UploadClient() {
 
   const processUpload = async () => {
     if (!file) return;
-
+    const toastId = showLoading('Uploading resume...');
     try {
       setStatus('uploading');
       
@@ -130,17 +135,22 @@ export function UploadClient() {
       setParsedResume(data.resume);
       setConfidenceScores(data.confidence);
       setStatus('review');
+      dismissToast(toastId);
+      showSuccess('Resume parsed successfully');
     } catch (err: unknown) {
       console.error(err);
       setStatus('error');
       const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
       setErrorMessage(message);
+      dismissToast(toastId);
+      showError(message);
     }
   };
 
   const saveAndContinue = async () => {
     if (!parsedResume) return;
 
+    const toastId = showLoading('Saving imported resume...');
     try {
       setStatus('saving');
       
@@ -152,17 +162,20 @@ export function UploadClient() {
       }
 
       setStatus('success');
+      dismissToast(toastId);
+      showSuccess('Resume saved successfully');
       
       // Navigate to builder
       setTimeout(() => {
         router.push(`/dashboard/builder`);
       }, 1500);
-
     } catch (err: unknown) {
       console.error(err);
       setStatus('error');
-      const message = err instanceof Error ? err.message : 'An unexpected error occurred while saving.';
+      const message = err instanceof Error ? err.message : 'Failed to save resume.';
       setErrorMessage(message);
+      dismissToast(toastId);
+      showError(message);
     }
   };
 
