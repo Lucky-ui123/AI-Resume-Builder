@@ -3,16 +3,17 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { FileText, Target, Plus, ArrowRight, TrendingUp, Briefcase, Sparkles } from 'lucide-react';
 import Link from 'next/link';
-import { getDashboardStats } from '@/lib/db-service';
+import { getDashboardStats, getUserSubscription } from '@/lib/db-service';
 
 export default async function DashboardPage() {
   const stats = await getDashboardStats();
+  const { userName } = await getUserSubscription();
   
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-10">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Welcome back, Alex</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {userName.split(' ')[0]}</h1>
           <p className="text-muted-foreground mt-1">Here is what is happening with your job search today.</p>
         </div>
         <div className="flex flex-wrap gap-3">
