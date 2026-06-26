@@ -33,11 +33,11 @@ export default async function SettingsPage() {
       </div>
 
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="mb-8 bg-muted/50 p-2 border border-border/60 rounded-2xl h-auto flex flex-wrap gap-2">
-          <TabsTrigger value="general" className="rounded-xl py-3 px-6 text-base font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">General</TabsTrigger>
-          <TabsTrigger value="billing" className="rounded-xl py-3 px-6 text-base font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">Billing & Plan</TabsTrigger>
-          <TabsTrigger value="notifications" className="rounded-xl py-3 px-6 text-base font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">Notifications</TabsTrigger>
-          <TabsTrigger value="security" className="rounded-xl py-3 px-6 text-base font-semibold text-muted-foreground data-[state=active]:text-white data-[state=active]:bg-primary data-[state=active]:shadow-md hover:text-foreground transition-all duration-200">Security</TabsTrigger>
+        <TabsList className="mb-8 w-fit">
+          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="billing">Billing & Plan</TabsTrigger>
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-6 focus-visible:outline-none focus-visible:ring-0">
