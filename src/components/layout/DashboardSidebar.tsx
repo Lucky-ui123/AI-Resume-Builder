@@ -62,7 +62,7 @@ export default function DashboardSidebar({
       {/* Logo */}
       <div className={`flex items-center border-b border-sidebar-border shrink-0 transition-all duration-300 ${isCollapsed ? 'min-h-16 flex-col justify-center py-3 gap-3' : 'h-16 justify-between px-5'}`}>
         {!isCollapsed && (
-          <Link href="/" className="flex items-center gap-2.5 group overflow-hidden">
+          <Link href="/dashboard" className="flex items-center gap-2.5 group overflow-hidden">
             <div className="bg-primary text-primary-foreground p-1.5 rounded-lg shadow-sm group-hover:bg-primary/90 transition-colors shrink-0">
               <FileText className="h-4 w-4" />
             </div>
@@ -70,7 +70,7 @@ export default function DashboardSidebar({
           </Link>
         )}
         {isCollapsed && (
-          <Link href="/" className="bg-primary text-primary-foreground p-1.5 rounded-lg shadow-sm">
+          <Link href="/dashboard" className="bg-primary text-primary-foreground p-1.5 rounded-lg shadow-sm">
             <FileText className="h-4 w-4" />
           </Link>
         )}
