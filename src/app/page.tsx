@@ -125,65 +125,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Abstract Visual / Dashboard Preview */}
-        <section className="max-w-6xl mx-auto mt-24 relative z-10 animate-in fade-in zoom-in-95 duration-1000 delay-500">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/50 to-background pointer-events-none z-20" />
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-xl relative overflow-hidden">
-            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-            <div className="flex items-center gap-2 mb-4 px-2">
-              <div className="w-3 h-3 rounded-full bg-destructive/20 border border-destructive/50" />
-              <div className="w-3 h-3 rounded-full bg-warning/20 border border-warning/50" />
-              <div className="w-3 h-3 rounded-full bg-success/20 border border-success/50" />
-            </div>
-            {/* Mock Dashboard UI */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-[400px] opacity-80 pointer-events-none">
-              <div className="col-span-1 rounded-xl bg-muted/30 border border-border p-4 space-y-4">
-                <div className="h-8 w-2/3 bg-muted rounded-lg" />
-                <div className="space-y-2">
-                  <div className="h-4 w-full bg-muted rounded" />
-                  <div className="h-4 w-5/6 bg-muted rounded" />
-                  <div className="h-4 w-4/6 bg-muted rounded" />
-                </div>
-              </div>
-              <div className="col-span-1 md:col-span-3 rounded-xl bg-muted/10 border border-border p-6 space-y-6 relative overflow-hidden">
-                <div className="absolute right-0 top-0 w-64 h-64 bg-primary/5 blur-[80px] rounded-full" />
-                <div className="flex justify-between items-start">
-                  <div className="space-y-2">
-                    <div className="h-10 w-64 bg-muted rounded-xl" />
-                    <div className="h-5 w-40 bg-muted/60 rounded-lg" />
-                  </div>
-                  <div className="h-12 w-12 rounded-full border-[4px] border-success/30 flex items-center justify-center">
-                    <span className="text-success font-bold text-xs">92%</span>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div className="h-24 w-full bg-muted/40 rounded-xl border border-border/50" />
-                  <div className="h-24 w-full bg-muted/40 rounded-xl border border-border/50" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Stats Section */}
-        <section className="max-w-5xl mx-auto mt-32 grid grid-cols-2 md:grid-cols-4 gap-8 text-center relative z-10">
-          <div className="space-y-2">
-            <h3 className="text-4xl font-bold text-heading">1M+</h3>
-            <p className="text-sm text-muted-foreground">Resumes Generated</p>
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-4xl font-bold text-primary">3x</h3>
-            <p className="text-sm text-muted-foreground">More Interviews</p>
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-4xl font-bold text-heading">85%</h3>
-            <p className="text-sm text-muted-foreground">ATS Pass Rate</p>
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-4xl font-bold text-heading">50k+</h3>
-            <p className="text-sm text-muted-foreground">Users Hired</p>
-          </div>
-        </section>
+        {/* Content below Hero */}
 
         {/* Features Bento Grid */}
         <section
