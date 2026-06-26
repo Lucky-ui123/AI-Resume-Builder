@@ -33,10 +33,10 @@ export async function login(formData: FormData) {
 }
 
 export async function signup(formData: FormData) {
-  const data = {
-    email: formData.get('email') as string,
-    password: formData.get('password') as string,
-  }
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
+  const firstName = formData.get('firstName') as string;
+  const lastName = formData.get('lastName') as string;
 
   // Check if supabase is configured
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -48,7 +48,15 @@ export async function signup(formData: FormData) {
   }
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.signUp(data)
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: `${firstName || ''} ${lastName || ''}`.trim()
+      }
+    }
+  })
 
   if (error) {
     return { error: error.message }

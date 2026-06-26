@@ -156,7 +156,7 @@ export default function DashboardSidebar({
             </Avatar>
             <div className="flex flex-col flex-1 min-w-0">
               <span className="text-sm font-semibold text-sidebar-foreground truncate">{userName}</span>
-              <span className="text-xs text-muted-foreground font-medium capitalize">{userPlan} Plan</span>
+              <span className="text-xs text-muted-foreground truncate">{userEmail}</span>
             </div>
           </div>
         )}
