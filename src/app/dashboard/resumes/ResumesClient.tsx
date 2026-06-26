@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Resume } from '@/types';
 import { 
   Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription 
@@ -39,6 +39,7 @@ interface ResumesClientProps {
 export default function ResumesClient({ initialResumes }: ResumesClientProps) {
   const router = useRouter();
   const [resumes, setResumes] = useState<Resume[]>(initialResumes);
+  const [hydrated, setHydrated] = useState(false);
   
   // Dialog States
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -56,10 +57,45 @@ export default function ResumesClient({ initialResumes }: ResumesClientProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
 
-  // Update resumes if initial changes
+  // Merge localStorage resumes into the list on the client.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setResumes(initialResumes);
+    let isMounted = true;
+    
+    const hydrate = async () => {
+      try {
+        const { lsGetAllResumes } = await import('@/lib/local-storage-service');
+        if (!isMounted) return;
+        
+        const lsResumes = lsGetAllResumes();
+        
+        if (lsResumes.length > 0) {
+          const existingIds = new Set(initialResumes.map(r => r.id));
+          const newOnes = lsResumes.filter(r => !existingIds.has(r.id));
+          
+          if (newOnes.length > 0) {
+            setResumes(
+              [...initialResumes, ...newOnes].sort((a, b) => 
+                new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
+              )
+            );
+          } else {
+            setResumes(initialResumes);
+          }
+        } else {
+          setResumes(initialResumes);
+        }
+      } catch {
+        if (isMounted) setResumes(initialResumes);
+      } finally {
+        if (isMounted) setHydrated(true);
+      }
+    };
+    
+    hydrate();
+    
+    return () => {
+      isMounted = false;
+    };
   }, [initialResumes]);
 
   const handleEdit = (resume: Resume) => {
@@ -84,8 +120,19 @@ export default function ResumesClient({ initialResumes }: ResumesClientProps) {
     setIsProcessing(true);
     const toastId = showLoading('Renaming resume...');
     try {
-      const result = await renameResumeAction(activeResume.id, newTitle);
-      if (result?.error) throw new Error(result.error);
+      let error: string | null = null;
+
+      if (activeResume.id.startsWith('ls_')) {
+        // localStorage-backed resume — handle client-side
+        const { lsRenameResume } = await import('@/lib/local-storage-service');
+        const result = lsRenameResume(activeResume.id, newTitle);
+        error = result.error;
+      } else {
+        const result = await renameResumeAction(activeResume.id, newTitle);
+        error = result?.error ?? null;
+      }
+
+      if (error) throw new Error(error);
       
       // Update local state for immediate feedback
       setResumes(resumes.map(r => r.id === activeResume.id ? { ...r, title: newTitle } : r));
@@ -111,8 +158,18 @@ export default function ResumesClient({ initialResumes }: ResumesClientProps) {
     setIsProcessing(true);
     const toastId = showLoading('Deleting resume...');
     try {
-      const result = await deleteResumeAction(activeResume.id);
-      if (result?.error) throw new Error(result.error);
+      let error: string | null = null;
+
+      if (activeResume.id.startsWith('ls_')) {
+        const { lsDeleteResume } = await import('@/lib/local-storage-service');
+        const result = lsDeleteResume(activeResume.id);
+        error = result.error;
+      } else {
+        const result = await deleteResumeAction(activeResume.id);
+        error = result?.error ?? null;
+      }
+
+      if (error) throw new Error(error);
       
       setResumes(resumes.filter(r => r.id !== activeResume.id));
       
@@ -131,14 +188,30 @@ export default function ResumesClient({ initialResumes }: ResumesClientProps) {
     setIsProcessing(true);
     const toastId = showLoading('Duplicating resume...');
     try {
-      const result = await duplicateResumeAction(resume.id);
-      if (result?.newId) {
-        // Optimistically reload page to get new data
-        router.refresh();
-        showSuccess('Resume duplicated successfully');
-      } else if (result?.error) {
-        showError(result.error);
+      let newId: string | null = null;
+      let error: string | null = null;
+
+      if (resume.id.startsWith('ls_')) {
+        const { lsDuplicateResume, lsGetAllResumes } = await import('@/lib/local-storage-service');
+        const result = lsDuplicateResume(resume.id);
+        newId = result.newId;
+        error = result.error;
+        if (newId) {
+          // Refresh local list without a server round-trip
+          setResumes(lsGetAllResumes());
+          showSuccess('Resume duplicated successfully');
+        }
+      } else {
+        const result = await duplicateResumeAction(resume.id);
+        newId = result?.newId ?? null;
+        error = result?.error ?? null;
+        if (newId) {
+          router.refresh();
+          showSuccess('Resume duplicated successfully');
+        }
       }
+
+      if (error) showError(error);
     } catch (error) {
       console.error('Duplicate error:', error);
       showError(error instanceof Error ? error.message : 'Failed to duplicate resume');
@@ -222,6 +295,9 @@ export default function ResumesClient({ initialResumes }: ResumesClientProps) {
       setIsProcessing(false);
     }
   };
+
+  // Don't flash the empty state before localStorage has been checked.
+  if (!hydrated) return null;
 
   if (resumes.length === 0) {
     return (

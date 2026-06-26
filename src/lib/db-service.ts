@@ -213,6 +213,7 @@ export async function getResume(id?: string): Promise<Resume | null> {
   if (!id || id === 'new') return null;
 
   if (!isSupabaseConfigured()) {
+    // Client handles localStorage directly, server can just return null
     return null;
   }
 
@@ -239,22 +240,17 @@ export async function getResume(id?: string): Promise<Resume | null> {
 
 export async function saveResume(resume: Resume): Promise<{ id: string; error: string | null }> {
   if (!isSupabaseConfigured()) {
-    // Mock save limit check
-    const sub = await getUserSubscription();
-    // In mock mode, pretend we have 1 existing resume (or whatever logic)
-    // if (!resume.id) we are creating a new one
-    if (!resume.id && 1 >= sub.limits.resumes) {
-      return { id: '', error: 'Resume limit reached. Please upgrade to create more resumes.' };
-    }
-    return { id: resume.id || 'res_mock_id', error: null };
+    // Should be handled by client before calling action, but fallback if reached
+    return { id: resume.id || 'res_123', error: null };
   }
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { id: '', error: 'Unauthorized' };
 
-  // Check limits if creating new
-  const isNew = !resume.id || resume.id === 'res_123';
+  // A resume is "new" when it has no ID, has the placeholder 'new' ID, or
+  // has an ls_ ID (previously localStorage-backed, now being synced to Supabase).
+  const isNew = !resume.id || resume.id === 'new' || resume.id.startsWith('ls_');
   if (isNew) {
     const sub = await getUserSubscription();
     const { count } = await supabase.from('resumes').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
@@ -332,6 +328,8 @@ export async function getResumeVersionData(versionId: string) {
 
 export async function getAllResumes() {
   if (!isSupabaseConfigured()) {
+    // Server cannot access localStorage — return empty array.
+    // ResumesClient.tsx hydrates from localStorage on the client side.
     return [];
   }
 
@@ -359,7 +357,9 @@ export async function getAllResumes() {
 }
 
 export async function deleteResume(id: string) {
-  if (!isSupabaseConfigured()) return { error: null };
+  if (!isSupabaseConfigured()) {
+    return { error: null };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.from('resumes').delete().eq('id', id);
@@ -367,7 +367,9 @@ export async function deleteResume(id: string) {
 }
 
 export async function renameResume(id: string, newTitle: string) {
-  if (!isSupabaseConfigured()) return { error: null };
+  if (!isSupabaseConfigured()) {
+    return { error: null };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.from('resumes').update({ title: newTitle }).eq('id', id);
@@ -375,7 +377,9 @@ export async function renameResume(id: string, newTitle: string) {
 }
 
 export async function duplicateResume(id: string) {
-  if (!isSupabaseConfigured()) return { newId: 'mock_dup', error: null };
+  if (!isSupabaseConfigured()) {
+    return { newId: `${id}_copy`, error: null };
+  }
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

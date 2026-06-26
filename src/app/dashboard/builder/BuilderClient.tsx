@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +27,7 @@ type SaveState = 'clean' | 'editing' | 'saving' | 'saved' | 'error' | 'offline';
 
 export default function BuilderClient({ initialResume }: { initialResume: Resume | null }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [resume, setResume] = useState<Resume>(initialResume || emptyResume);
   const [showPreviewMobile, setShowPreviewMobile] = useState(false);
   
@@ -39,22 +40,76 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
   const latestState = useRef({ resume, saveState });
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load from local storage if exists and unsaved
+  // On mount: restore the best available draft from localStorage.
+  // - For a brand-new resume (no initialResume): automatically load the 'new' draft
+  //   if one was saved previously, so the user never loses work.
+  // - For an ls_-backed resume loaded via URL param: the server returned it via
+  //   lsGetResume, so initialResume is already correct — just flag load done.
+  // - For a Supabase resume that has a newer local draft: show the Restore banner
+  //   so the user can choose (conflict resolution).
   useEffect(() => {
     setIsOnline(navigator.onLine);
-    const draftStr = localStorage.getItem(`hirecraft_draft_${initialResume?.id || 'new'}`);
-    if (draftStr) {
-      try {
-        const draft = JSON.parse(draftStr);
-        if (draft && draft.title) {
-          setHasUnsyncedChanges(true);
+
+    if (!initialResume) {
+      const idParam = searchParams.get('id');
+      
+      if (idParam) {
+        // If server returned null but we have an ls_ ID in URL, we need to load from localStorage
+        if (idParam.startsWith('ls_')) {
+          import('@/lib/local-storage-service').then(({ lsGetResume }) => {
+            const loaded = lsGetResume(idParam);
+            if (loaded) {
+              setResume(loaded);
+              setSaveState('saved');
+            } else {
+              // Not found, maybe deleted
+              router.replace('/dashboard/resumes');
+            }
+            initialLoadDone.current = true;
+          }).catch(console.error);
+          return; // wait for import
+        } else {
+          // A Supabase ID was requested but the server returned null (e.g. deleted or unauthorized)
+          router.replace('/dashboard/resumes');
+          initialLoadDone.current = true;
+          return;
         }
-      } catch (e) {
-        console.error('Failed to parse local draft', e);
+      }
+
+      // New resume — check for an auto-saved 'new' draft and restore it silently.
+      const draftStr = localStorage.getItem('hirecraft_draft_new');
+      if (draftStr) {
+        try {
+          const draft = JSON.parse(draftStr);
+          if (draft && draft.title) {
+            setResume(draft);
+            setSaveState('editing');
+            // Don't remove the draft yet; it will be cleared after the first
+            // successful auto-save produces a real ID.
+          }
+        } catch (e) {
+          console.error('Failed to restore new draft', e);
+        }
+      }
+    } else {
+      // Existing resume — check if there's a *different*, newer local draft
+      // (can happen if the user made changes that failed to sync).
+      const draftStr = localStorage.getItem(`hirecraft_draft_${initialResume.id}`);
+      if (draftStr) {
+        try {
+          const draft = JSON.parse(draftStr);
+          if (draft && draft.title) {
+            setHasUnsyncedChanges(true);
+          }
+        } catch (e) {
+          console.error('Failed to parse local draft', e);
+        }
       }
     }
+
     initialLoadDone.current = true;
-  }, [initialResume]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, initialResume]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -92,19 +147,31 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
+  // Save helper to bypass server action if Supabase is unconfigured
+  const performSave = async (res: Resume) => {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      return await saveResumeAction(res);
+    } else {
+      const { lsSaveResume } = await import('@/lib/local-storage-service');
+      return lsSaveResume(res);
+    }
+  };
+
   // Save when component unmounts for Next.js soft navigation
   useEffect(() => {
     return () => {
       const { resume: r, saveState: s } = latestState.current;
-      if ((s === 'editing' || s === 'error' || s === 'offline') && r.id && r.id !== 'res_123') {
-        saveResumeAction({ 
+      // Only attempt an unmount-save if there are unsaved changes and the
+      // resume has a real persisted ID (not an empty/placeholder value).
+      const hasRealId = r.id && r.id !== 'new';
+      if ((s === 'editing' || s === 'error' || s === 'offline') && hasRealId) {
+        performSave({ 
           ...r, 
           isDraft: r.isDraft !== false 
         }).catch(console.error);
       }
     };
   }, []);
-
   useEffect(() => {
     if (!initialLoadDone.current) return;
     
@@ -116,7 +183,11 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
     
     // Save locally immediately
     const draftKey = `hirecraft_draft_${resume.id || 'new'}`;
-    localStorage.setItem(draftKey, JSON.stringify(resume));
+    try {
+      localStorage.setItem(draftKey, JSON.stringify(resume));
+    } catch (e) {
+      console.error('Failed to save to localStorage, quota may be exceeded', e);
+    }
 
     if (!isOnline) {
       setSaveState('offline');
@@ -129,11 +200,16 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
       setSaveState('saving');
       try {
         const isDraftStatus = resume.isDraft !== false;
-        const { id, error } = await saveResumeAction({ ...resume, isDraft: isDraftStatus });
+        const { id, error } = await performSave({ ...resume, isDraft: isDraftStatus });
         if (!error && id) {
-          if (!resume.id || resume.id === 'res_123') {
+          // For a new resume (no prior ID, or a freshly-assigned ls_ ID for the
+          // 'new' draft), update the URL so refreshing reopens the same resume.
+          const isNewResume = !resume.id || resume.id === 'new';
+          if (isNewResume) {
             router.replace('/dashboard/builder?id=' + id);
             setResume(prev => ({ ...prev, id, isDraft: isDraftStatus }));
+            // Clear the generic 'new' draft key now that we have a real ID.
+            localStorage.removeItem('hirecraft_draft_new');
           }
           setLastSaved(new Date());
           setSaveState('saved');
@@ -157,13 +233,16 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
     setSaveState('saving');
     const loadingId = showLoading('Saving changes...');
     try {
-      const { id, error } = await saveResumeAction({ ...resume, isDraft: false });
+      const { id, error } = await performSave({ ...resume, isDraft: false });
       dismissToast(loadingId);
       if (!error && id) {
         setResume({ ...resume, id, isDraft: false });
         setSaveState('saved');
         setLastSaved(new Date());
         localStorage.removeItem(`hirecraft_draft_${resume.id || 'new'}`);
+        if (resume.id !== id) {
+          localStorage.removeItem('hirecraft_draft_new');
+        }
         setHasUnsyncedChanges(false);
         showSuccess('Changes saved successfully');
         
@@ -181,7 +260,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
   };
 
   const handleSaveVersion = async () => {
-    if (!resume.id || resume.id === 'res_123') return;
+    if (!resume.id || resume.id === 'res_123' || resume.id === 'new' || resume.id.startsWith('ls_')) return;
     setSaveState('saving');
     const loadingId = showLoading('Saving version...');
     try {
@@ -376,16 +455,16 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
                 <AccordionContent className="space-y-4 pt-1 pb-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2 md:col-span-2">
-                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Resume Title (Internal Reference)</Label>
-                      <Input value={resume.title} onChange={(e) => setResume({ ...resume, title: e.target.value })} placeholder="e.g. Software Engineer Resume" />
+                      <Label htmlFor="resume-title" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Resume Title (Internal Reference)</Label>
+                      <Input id="resume-title" value={resume.title} onChange={(e) => setResume({ ...resume, title: e.target.value })} placeholder="e.g. Software Engineer Resume" />
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Target Role</Label>
                       <Input value={resume.targetRole || ''} onChange={(e) => setResume({ ...resume, targetRole: e.target.value })} placeholder="e.g. Frontend Developer" />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">First Name</Label>
-                      <Input value={resume.personalInfo.firstName} onChange={(e) => setResume({ ...resume, personalInfo: { ...resume.personalInfo, firstName: e.target.value } })} />
+                      <Label htmlFor="first-name" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">First Name</Label>
+                      <Input id="first-name" value={resume.personalInfo.firstName} onChange={(e) => setResume({ ...resume, personalInfo: { ...resume.personalInfo, firstName: e.target.value } })} />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Last Name</Label>
