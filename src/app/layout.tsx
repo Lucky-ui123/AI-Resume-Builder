@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
-import 'biings-ds/build/bds.css';
 import './globals.css';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
