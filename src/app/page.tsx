@@ -10,8 +10,21 @@ import {
   CheckCircle2,
   ArrowRight,
 } from "lucide-react";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    try {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        redirect("/dashboard");
+      }
+    } catch (error) {
+      // Safely ignore if auth check fails
+    }
+  }
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary/20 overflow-hidden relative font-sans">
       {/* Background glow effects */}
