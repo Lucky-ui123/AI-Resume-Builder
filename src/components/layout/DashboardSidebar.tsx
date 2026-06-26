@@ -132,7 +132,25 @@ export default function DashboardSidebar({
             if (isCollapsed) {
               return (
                 <Tooltip key={item.name}>
-                  <TooltipTrigger render={linkContent} />
+                  <TooltipTrigger render={(props) => (
+                    <Link
+                      href={item.href}
+                      className={`group flex items-center rounded-lg py-2.5 text-sm font-medium transition-all duration-200 justify-center px-0 mx-2 ${
+                        pathname === item.href
+                          ? 'bg-primary !text-white shadow-md hover:shadow-lg'
+                          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                      }`}
+                      onClick={() => onClose && onClose()}
+                      {...props}
+                    >
+                      <item.icon
+                        className={`h-5 w-5 flex-shrink-0 transition-colors ${
+                          pathname === item.href ? '!text-white' : 'text-muted-foreground group-hover:text-foreground'
+                        }`}
+                        aria-hidden="true"
+                      />
+                    </Link>
+                  )} />
                   <TooltipContent side="right" className="flex items-center gap-4">
                     {item.name}
                   </TooltipContent>
