@@ -11,6 +11,10 @@ export default async function DashboardPage() {
   const resumes = await getAllResumes();
   const recentResumes = resumes.slice(0, 3);
   
+  const profileStrength = Math.min(100, 40 + (stats.totalResumes * 15));
+  let atsFeedback = "Needs improvement";
+  if (stats.latestAtsScore >= 80) atsFeedback = "Excellent fit for recent roles";
+  else if (stats.latestAtsScore >= 60) atsFeedback = "Good fit for recent roles";
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-10">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -37,10 +41,10 @@ export default async function DashboardPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">85%</div>
-            <Progress value={85} className="mt-3 h-1.5" />
+            <div className="text-2xl font-bold">{profileStrength}%</div>
+            <Progress value={profileStrength} className="mt-3 h-1.5" />
             <p className="text-xs text-muted-foreground mt-3">
-              +15% since last month
+              Based on your active resumes
             </p>
           </CardContent>
         </Card>
@@ -52,7 +56,7 @@ export default async function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">{stats.latestAtsScore}/100</div>
             <p className="text-xs text-muted-foreground mt-3 font-medium">
-              Excellent fit for recent roles
+              {atsFeedback}
             </p>
           </CardContent>
         </Card>
@@ -64,7 +68,7 @@ export default async function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalResumes}</div>
             <p className="text-xs text-muted-foreground mt-3">
-              3 active applications
+              Total created so far
             </p>
           </CardContent>
         </Card>
@@ -76,7 +80,7 @@ export default async function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">{stats.coverLetters}</div>
             <p className="text-xs text-muted-foreground mt-3">
-              Generated this month
+              Total generated so far
             </p>
           </CardContent>
         </Card>
