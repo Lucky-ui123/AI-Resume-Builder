@@ -91,7 +91,7 @@ export default function AiSuggestionsClient({ resume }: { resume: Resume }) {
     }
 
     try {
-      let updatedResume = { ...resume };
+      const updatedResume = { ...resume };
       if (id === 'summary-1') {
         updatedResume.summary = suggestion.improvedText;
       } else if (id.startsWith('exp-')) {

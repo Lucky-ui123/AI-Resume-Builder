@@ -20,7 +20,7 @@ export default async function ExportPage({ searchParams }: { searchParams: { id?
             <FileText className="h-8 w-8 text-muted-foreground" />
           </div>
           <h2 className="text-2xl font-bold mb-2">Resume Not Found</h2>
-          <p className="text-muted-foreground mb-6">The resume you are looking for does not exist or you don't have access to it.</p>
+          <p className="text-muted-foreground mb-6">The resume you are looking for does not exist or you don&apos;t have access to it.</p>
           <Link href="/dashboard/resumes">
             <Button>Go to My Resumes</Button>
           </Link>
