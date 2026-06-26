@@ -3,11 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { FileText, Target, Plus, ArrowRight, TrendingUp, Briefcase, Sparkles } from 'lucide-react';
 import Link from 'next/link';
-import { getDashboardStats, getUserSubscription } from '@/lib/db-service';
+import { getDashboardStats, getUserSubscription, getAllResumes } from '@/lib/db-service';
 
 export default async function DashboardPage() {
   const stats = await getDashboardStats();
   const { userName } = await getUserSubscription();
+  const resumes = await getAllResumes();
+  const recentResumes = resumes.slice(0, 3);
   
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-10">
@@ -80,80 +82,43 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4">
+      <div className="grid gap-6 md:grid-cols-1">
+        <Card>
           <CardHeader>
             <CardTitle>Recent Resumes</CardTitle>
             <CardDescription>
-              Your most recently edited resumes and their performance.
+              Your most recently edited resumes.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              {[
-                { name: 'Senior Frontend Developer', updated: '2 hours ago', score: 92 },
-                { name: 'React Developer', updated: '3 days ago', score: 85 },
-                { name: 'Fullstack Engineer', updated: '1 week ago', score: 78 },
-              ].map((resume, i) => (
-                <div key={i} className="flex items-center justify-between">
+              {recentResumes.length > 0 ? recentResumes.map((resume) => (
+                <div key={resume.id} className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="p-2 bg-secondary rounded-xl">
                       <FileText className="h-5 w-5 text-foreground" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium leading-none mb-1">{resume.name}</p>
-                      <p className="text-sm text-muted-foreground">Updated {resume.updated}</p>
+                      <p className="text-sm font-medium leading-none mb-1">{resume.title || 'Untitled Resume'}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {resume.targetRole ? `${resume.targetRole} • ` : ''} 
+                        Updated {resume.lastModified ? new Date(resume.lastModified).toLocaleDateString() : 'recently'}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-sm font-medium leading-none mb-1">{resume.score}% Match</p>
-                      <p className="text-xs text-muted-foreground">ATS Score</p>
-                    </div>
-                    <Button type="button" variant="ghost" className="h-10 w-10 p-0">
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
+                    <Link href={`/dashboard/builder/${resume.id}`}>
+                      <Button type="button" variant="ghost" className="h-10 w-10 p-0">
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </Link>
                   </div>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle>Suggested Actions</CardTitle>
-            <CardDescription>
-              Improve your chances of landing an interview.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="p-4 border border-border rounded-2xl bg-card shadow-sm flex flex-col gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="p-1.5 bg-secondary text-foreground rounded-md mt-0.5">
-                    <Target className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium">Missing Keywords Detected</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Your &apos;React Developer&apos; resume is missing &quot;Jest&quot; and &quot;Cypress&quot; from a recent job match.</p>
-                  </div>
+              )) : (
+                <div className="text-sm text-muted-foreground py-4 text-center">
+                  No resumes found. Create your first resume to get started!
                 </div>
-                <Button variant="secondary" size="sm" className="w-full">Review Suggestions</Button>
-              </div>
-              
-              <div className="p-4 border border-border rounded-2xl bg-card shadow-sm flex flex-col gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="p-1.5 bg-accent text-accent-foreground rounded-md mt-0.5">
-                    <Sparkles className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium">Enhance Summary with AI</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Make your professional summary more impactful using our AI rewriter.</p>
-                  </div>
-                </div>
-                <Button variant="ai" size="sm" className="w-full">Enhance Now</Button>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>
