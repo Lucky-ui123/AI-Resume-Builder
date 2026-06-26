@@ -108,11 +108,11 @@ export default function DashboardSidebar({
               <Link
                 key={item.name}
                 href={item.href}
-                className={`group flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors duration-150 ${
+                className={`group flex items-center rounded-lg py-2.5 text-sm font-medium transition-all duration-200 ${
                   isCollapsed ? 'justify-center px-0 mx-2' : 'px-3'
                 } ${
                   isActive
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                    ? 'bg-primary text-primary-foreground shadow-md hover:shadow-lg'
                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
                 onClick={() => onClose && onClose()}
@@ -121,7 +121,7 @@ export default function DashboardSidebar({
                   className={`h-5 w-5 flex-shrink-0 transition-colors ${
                     !isCollapsed ? 'mr-3' : ''
                   } ${
-                    isActive ? 'text-sidebar-accent-foreground' : 'text-muted-foreground group-hover:text-foreground'
+                    isActive ? 'text-primary-foreground' : 'text-muted-foreground group-hover:text-foreground'
                   }`}
                   aria-hidden="true"
                 />
