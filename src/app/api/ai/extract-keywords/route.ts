@@ -4,9 +4,12 @@ import { extractKeywords } from '@/lib/ai-service';
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const isSupabaseConfigured = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (isSupabaseConfigured) {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const { jobDescription } = await req.json();
     if (!jobDescription) return NextResponse.json({ error: 'Job description is required' }, { status: 400 });

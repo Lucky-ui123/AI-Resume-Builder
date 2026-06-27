@@ -1,6 +1,6 @@
 import { createClient, createAdminClient } from './supabase/server';
 import { mockSubscription } from './mock-data';
-import { Resume } from '@/types';
+import { Resume, MatchReport, AtsReport, CoverLetter, ResumeSuggestion } from '@/types';
 import { SUBSCRIPTION_PLANS, PlanType } from './subscription-config';
 
 // Helper to check if Supabase is configured
@@ -419,4 +419,234 @@ export async function restoreVersion(resumeId: string, versionId: string) {
   const { error: updateError } = await supabase.from('resumes').update({ content: versionData.content }).eq('id', resumeId);
   
   return { error: updateError ? updateError.message : null };
+}
+
+// ---------------------------------------------------------------------------
+// Match Reports DB Operations
+// ---------------------------------------------------------------------------
+export async function saveMatchReport(report: MatchReport) {
+  if (!isSupabaseConfigured()) return { id: report.id || 'mr_mock_123', error: null };
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { id: '', error: 'Unauthorized' };
+
+  const dbReport = {
+    resume_id: report.resumeId,
+    resume_title: report.resumeTitle,
+    job_title: report.jobTitle,
+    company_name: report.companyName,
+    job_description: report.jobDescription,
+    match_score: report.matchScore,
+    skills_match: report.skillsMatch,
+    keywords: report.keywords,
+    experience_match: report.experienceMatch,
+    education_match: report.educationMatch,
+    strengths: report.strengths,
+    weaknesses: report.weaknesses,
+    recommendations: report.recommendations,
+    user_id: user.id
+  };
+
+  const { data, error } = await supabase.from('match_reports').insert(dbReport).select('id').single();
+  return { id: data?.id || '', error: error ? error.message : null };
+}
+
+export async function getMatchReports() {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('match_reports').select('*').order('created_at', { ascending: false });
+  if (error || !data) return [];
+  
+  return data.map((r: Record<string, unknown>) => ({
+    id: r.id,
+    resumeId: r.resume_id,
+    resumeTitle: r.resume_title,
+    jobTitle: r.job_title,
+    companyName: r.company_name,
+    jobDescription: r.job_description,
+    matchScore: r.match_score,
+    skillsMatch: r.skills_match,
+    keywords: r.keywords,
+    experienceMatch: r.experience_match,
+    educationMatch: r.education_match,
+    strengths: r.strengths,
+    weaknesses: r.weaknesses,
+    recommendations: r.recommendations,
+    created_at: r.created_at
+  }));
+}
+
+export async function deleteMatchReport(id: string) {
+  if (!isSupabaseConfigured()) return { error: null };
+  const supabase = await createClient();
+  const { error } = await supabase.from('match_reports').delete().eq('id', id);
+  return { error: error ? error.message : null };
+}
+
+// ---------------------------------------------------------------------------
+// ATS Reports DB Operations
+// ---------------------------------------------------------------------------
+export async function saveAtsReport(report: AtsReport) {
+  if (!isSupabaseConfigured()) return { id: report.id || 'ats_mock_123', error: null };
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { id: '', error: 'Unauthorized' };
+
+  const dbReport = {
+    resume_id: report.resumeId,
+    resume_title: report.resumeTitle,
+    overall_score: report.overallScore,
+    contact_info_score: report.contactInfoScore,
+    structure_score: report.structureScore,
+    keyword_score: report.keywordScore,
+    readability_score: report.readabilityScore,
+    formatting_score: report.formattingScore,
+    completeness_score: report.completenessScore,
+    missing_keywords: report.missingKeywords,
+    suggestions: report.suggestions,
+    user_id: user.id
+  };
+
+  const { data, error } = await supabase.from('ats_reports').insert(dbReport).select('id').single();
+  return { id: data?.id || '', error: error ? error.message : null };
+}
+
+export async function getAtsReports() {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('ats_reports').select('*').order('created_at', { ascending: false });
+  if (error || !data) return [];
+  
+  return data.map((r: Record<string, unknown>) => ({
+    id: r.id,
+    resumeId: r.resume_id,
+    resumeTitle: r.resume_title,
+    overallScore: r.overall_score,
+    contactInfoScore: r.contact_info_score,
+    structureScore: r.structure_score,
+    keywordScore: r.keyword_score,
+    readabilityScore: r.readability_score,
+    formattingScore: r.formatting_score,
+    completenessScore: r.completeness_score,
+    missingKeywords: r.missing_keywords,
+    suggestions: r.suggestions,
+    created_at: r.created_at
+  }));
+}
+
+export async function deleteAtsReport(id: string) {
+  if (!isSupabaseConfigured()) return { error: null };
+  const supabase = await createClient();
+  const { error } = await supabase.from('ats_reports').delete().eq('id', id);
+  return { error: error ? error.message : null };
+}
+
+// ---------------------------------------------------------------------------
+// Cover Letters DB Operations
+// ---------------------------------------------------------------------------
+export async function saveCoverLetter(letter: CoverLetter) {
+  if (!isSupabaseConfigured()) return { id: letter.id || 'cl_mock_123', error: null };
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { id: '', error: 'Unauthorized' };
+
+  const dbLetter = {
+    title: letter.title,
+    resume_id: letter.resumeId,
+    job_title: letter.jobTitle,
+    company_name: letter.companyName,
+    job_description: letter.jobDescription,
+    hiring_manager: letter.hiringManager,
+    tone: letter.tone,
+    length: letter.length,
+    content: letter.content,
+    user_id: user.id
+  };
+
+  const isNew = !letter.id || letter.id === 'new';
+  let query;
+  if (isNew) {
+    query = supabase.from('cover_letters').insert(dbLetter).select('id').single();
+  } else {
+    query = supabase.from('cover_letters').update(dbLetter).eq('id', letter.id).select('id').single();
+  }
+
+  const { data, error } = await query;
+  return { id: data?.id || '', error: error ? error.message : null };
+}
+
+export async function getCoverLetters() {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('cover_letters').select('*').order('updated_at', { ascending: false });
+  if (error || !data) return [];
+  
+  return data.map((l: Record<string, unknown>) => ({
+    id: l.id,
+    title: l.title,
+    resumeId: l.resume_id,
+    jobTitle: l.job_title,
+    companyName: l.company_name,
+    jobDescription: l.job_description,
+    hiringManager: l.hiring_manager,
+    tone: l.tone,
+    length: l.length,
+    content: l.content,
+    lastModified: l.updated_at
+  }));
+}
+
+export async function deleteCoverLetter(id: string) {
+  if (!isSupabaseConfigured()) return { error: null };
+  const supabase = await createClient();
+  const { error } = await supabase.from('cover_letters').delete().eq('id', id);
+  return { error: error ? error.message : null };
+}
+
+export async function renameCoverLetter(id: string, newTitle: string) {
+  if (!isSupabaseConfigured()) return { error: null };
+  const supabase = await createClient();
+  const { error } = await supabase.from('cover_letters').update({ title: newTitle }).eq('id', id);
+  return { error: error ? error.message : null };
+}
+
+export async function duplicateCoverLetter(id: string) {
+  if (!isSupabaseConfigured()) return { newId: `${id}_copy`, error: null };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('cover_letters').select('*').eq('id', id).single();
+  if (error || !data) return { newId: null, error: error?.message || 'Not found' };
+
+  const newLetter = {
+    ...data,
+    id: undefined,
+    title: `${data.title} (Copy)`,
+    created_at: undefined,
+    updated_at: undefined
+  };
+
+  const { data: insertData, error: insertError } = await supabase.from('cover_letters').insert(newLetter).select('id').single();
+  if (insertError) return { newId: null, error: insertError.message };
+  return { newId: insertData.id, error: null };
+}
+
+// ---------------------------------------------------------------------------
+// Resume Suggestions DB Operations
+// ---------------------------------------------------------------------------
+export async function saveSuggestions(resumeId: string, suggestions: ResumeSuggestion[]) {
+  if (!isSupabaseConfigured()) return { error: null };
+  const supabase = await createClient();
+  const { error } = await supabase.from('resume_suggestions').upsert({
+    resume_id: resumeId,
+    suggestions: suggestions,
+    updated_at: new Date().toISOString()
+  });
+  return { error: error ? error.message : null };
+}
+
+export async function getSuggestions(resumeId: string) {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('resume_suggestions').select('suggestions').eq('resume_id', resumeId).single();
+  if (error || !data) return [];
+  return data.suggestions || [];
 }

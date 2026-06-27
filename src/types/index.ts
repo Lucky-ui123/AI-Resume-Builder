@@ -98,17 +98,44 @@ export interface JobDescription {
   keywords: string[];
 }
 
+export interface MatchReport {
+  id: string;
+  resumeId: string;
+  resumeTitle: string;
+  jobTitle: string;
+  companyName: string;
+  jobDescription: string;
+  matchScore: number;
+  skillsMatch: {
+    matched: string[];
+    missing: string[];
+  };
+  keywords: {
+    matched: string[];
+    missing: string[];
+  };
+  experienceMatch: string;
+  educationMatch: string;
+  strengths: string[];
+  weaknesses: string[];
+  recommendations: string[];
+  created_at: string;
+}
+
 export interface AtsReport {
   id: string;
   resumeId: string;
-  jobDescriptionId?: string;
+  resumeTitle: string;
   overallScore: number;
+  contactInfoScore: number;
+  structureScore: number;
   keywordScore: number;
-  formattingScore: number;
   readabilityScore: number;
+  formattingScore: number;
   completenessScore: number;
   missingKeywords: string[];
   suggestions: AtsSuggestion[];
+  created_at: string;
 }
 
 export interface AtsSuggestion {
@@ -118,17 +145,25 @@ export interface AtsSuggestion {
   section: string;
 }
 
-export interface AiSuggestion {
+export interface ResumeSuggestion {
   id: string;
-  section: string;
-  originalText: string;
-  improvedText: string;
+  category: 'Grammar' | 'Tone' | 'Action Verbs' | 'Metrics' | 'Skills' | 'Summary' | 'Title' | 'ATS';
+  targetField: string; // e.g. "summary", "experience[0].description"
+  currentText: string;
+  suggestedText: string;
+  reason: string;
 }
 
 export interface CoverLetter {
   id: string;
+  title: string;
   resumeId: string;
-  jobDescriptionId: string;
+  jobTitle: string;
+  companyName: string;
+  jobDescription: string;
+  hiringManager?: string;
+  tone: string;
+  length: string;
   content: string;
   lastModified: string;
 }

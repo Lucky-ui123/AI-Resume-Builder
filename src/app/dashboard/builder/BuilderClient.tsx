@@ -14,27 +14,74 @@ import {
 } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sparkles, Save, Eye, LayoutPanelLeft, Check, X, Loader2, History, FileEdit, Trash2, Plus, Palette, LayoutTemplate, WifiOff, AlertCircle, Clock } from 'lucide-react';
+import { Sparkles, Save, Eye, LayoutPanelLeft, Check, X, Loader2, History, FileEdit, Trash2, Plus, Palette, LayoutTemplate, WifiOff, AlertCircle, Clock, Download, HelpCircle } from 'lucide-react';
 import { emptyResume, mockResume } from '@/lib/mock-data';
 import { saveResumeAction, saveResumeVersionAction } from './actions';
-import { Resume, Skill } from '@/types';
+import { Resume, Skill, ResumeSuggestion } from '@/types';
 import { ResumePreview } from '@/components/resume/ResumePreview';
+import { Card } from '@/components/ui/card';
 import { showSuccess, showError, showLoading, dismissToast } from '@/lib/toast';
 import { templates } from '@/lib/templates';
 import { TemplateMiniPreview } from '@/components/resume/TemplateMiniPreview';
+import { generatePDF } from '@/lib/export-utils';
+import { generateSuggestionsAction } from '../career-actions';
+import { useResumes } from '@/context/ResumeContext';
 
 type SaveState = 'clean' | 'editing' | 'saving' | 'saved' | 'error' | 'offline';
 
 export default function BuilderClient({ initialResume }: { initialResume: Resume | null }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { saveResume } = useResumes();
   const [resume, setResume] = useState<Resume>(initialResume || emptyResume);
   const [showPreviewMobile, setShowPreviewMobile] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [suggestions, setSuggestions] = useState<ResumeSuggestion[]>([]);
+  const [isAnalyzingSuggestions, setIsAnalyzingSuggestions] = useState(false);
   
   const [saveState, setSaveState] = useState<SaveState>('clean');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsyncedChanges, setHasUnsyncedChanges] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+
+  const handleApplySuggestion = (sug: ResumeSuggestion) => {
+    const updated = { ...resume };
+    if (sug.targetField === 'summary') {
+      updated.summary = sug.suggestedText;
+    } else if (sug.targetField.startsWith('experience[')) {
+      const match = sug.targetField.match(/experience\[(\d+)\]\.description/);
+      if (match && updated.experience) {
+        const idx = parseInt(match[1]);
+        if (updated.experience[idx]) {
+          updated.experience[idx].description = sug.suggestedText;
+        }
+      }
+    }
+    setResume(updated);
+    setSuggestions(prev => prev.filter(s => s.id !== sug.id));
+    showSuccess(`Applied ${sug.category} suggestion!`);
+  };
+
+  const handleApplyAll = () => {
+    if (suggestions.length === 0) return;
+    const updated = { ...resume };
+    suggestions.forEach(sug => {
+      if (sug.targetField === 'summary') {
+        updated.summary = sug.suggestedText;
+      } else if (sug.targetField.startsWith('experience[')) {
+        const match = sug.targetField.match(/experience\[(\d+)\]\.description/);
+        if (match && updated.experience) {
+          const idx = parseInt(match[1]);
+          if (updated.experience[idx]) {
+            updated.experience[idx].description = sug.suggestedText;
+          }
+        }
+      }
+    });
+    setResume(updated);
+    setSuggestions([]);
+    showSuccess(`Applied all ${suggestions.length} suggestions!`);
+  };
   
   const initialLoadDone = useRef(false);
   const latestState = useRef({ resume, saveState });
@@ -147,14 +194,8 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  // Save helper to bypass server action if Supabase is unconfigured
   const performSave = async (res: Resume) => {
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      return await saveResumeAction(res);
-    } else {
-      const { lsSaveResume } = await import('@/lib/local-storage-service');
-      return lsSaveResume(res);
-    }
+    return await saveResume(res);
   };
 
   // Save when component unmounts for Next.js soft navigation
@@ -172,16 +213,27 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
       }
     };
   }, []);
+
+  // Tracks whether the last resume state change was caused by an auto-save
+  // assigning a new ID (not a user edit), to prevent re-triggering a save.
+  const justAssignedIdRef = useRef(false);
+
   useEffect(() => {
     if (!initialLoadDone.current) return;
-    
-    // Prevent saving if we just loaded or explicitly set clean
+
+    // Skip the save cycle if this change was triggered by assigning the real ID
+    // after a successful auto-save (prevents save loop on new resumes).
+    if (justAssignedIdRef.current) {
+      justAssignedIdRef.current = false;
+      return;
+    }
+
+    // Transition to editing state unless we're already mid-save
     if (saveState === 'clean' || saveState === 'saved') {
-      // But if resume changed, we enter editing state
       setSaveState('editing');
     }
-    
-    // Save locally immediately
+
+    // Save locally immediately (offline-first)
     const draftKey = `hirecraft_draft_${resume.id || 'new'}`;
     try {
       localStorage.setItem(draftKey, JSON.stringify(resume));
@@ -202,13 +254,12 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
         const isDraftStatus = resume.isDraft !== false;
         const { id, error } = await performSave({ ...resume, isDraft: isDraftStatus });
         if (!error && id) {
-          // For a new resume (no prior ID, or a freshly-assigned ls_ ID for the
-          // 'new' draft), update the URL so refreshing reopens the same resume.
           const isNewResume = !resume.id || resume.id === 'new';
           if (isNewResume) {
+            // Mark that the next resume state change is from ID assignment, not a user edit
+            justAssignedIdRef.current = true;
             router.replace('/dashboard/builder?id=' + id);
             setResume(prev => ({ ...prev, id, isDraft: isDraftStatus }));
-            // Clear the generic 'new' draft key now that we have a real ID.
             localStorage.removeItem('hirecraft_draft_new');
           }
           setLastSaved(new Date());
@@ -227,6 +278,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resume, router, isOnline]);
   
   const handleSave = async () => {
@@ -273,6 +325,46 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
       dismissToast(loadingId);
       setSaveState('error');
       showError("Couldn't save version.");
+    }
+  };
+  
+  const handleExport = async () => {
+    setIsExporting(true);
+    const loadingId = showLoading('Exporting PDF...');
+    
+    try {
+      // Check export limit
+      const limitRes = await fetch('/api/export-limit', { method: 'POST' });
+      if (!limitRes.ok) {
+        if (limitRes.status === 403) {
+          dismissToast(loadingId);
+          showError('Export limit reached. Upgrade to Pro for unlimited exports.');
+          setIsExporting(false);
+          return;
+        }
+        throw new Error('Failed to check export limit');
+      }
+
+      const formatName = (name: string) => {
+        if (!name) return '';
+        const trimmed = name.trim();
+        return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+      };
+
+      const firstName = formatName(resume.personalInfo.firstName) || 'Firstname';
+      const lastName = formatName(resume.personalInfo.lastName) || 'Lastname';
+      const filename = `${firstName}_${lastName}_Resume.pdf`;
+      
+      await generatePDF('resume-export-preview-hidden', filename);
+      
+      dismissToast(loadingId);
+      showSuccess('PDF exported successfully!');
+    } catch (err) {
+      console.error('Export failed:', err);
+      dismissToast(loadingId);
+      showError('Failed to export PDF. Please try again.');
+    } finally {
+      setIsExporting(false);
     }
   };
   
@@ -409,6 +501,15 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
               }}>
                 <Sparkles className="mr-2 h-4 w-4" /> Auto-Fill
               </Button>
+              <Button 
+                variant="outline" 
+                className="shadow-sm font-semibold border-border/50 bg-background hover:bg-accent" 
+                onClick={handleExport} 
+                disabled={isExporting}
+              >
+                {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                Export PDF
+              </Button>
               <Button variant="outline" className="shadow-sm font-semibold border-border/50" onClick={handleSaveVersion} disabled={saveState === 'saving' || !resume.id || resume.id === 'res_123'}>
                 <History className="mr-2 h-4 w-4" /> Save Version
               </Button>
@@ -438,10 +539,11 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
         <div className={`w-full md:w-1/2 flex-col bg-background z-10 ${showPreviewMobile ? 'hidden' : 'flex'}`}>
           <Tabs defaultValue="content" className="flex flex-col h-full w-full">
             <div className="p-4 md:p-6 border-b flex justify-between items-center bg-background/95 sticky top-0 z-10">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="content"><FileEdit className="w-4 h-4 mr-2"/>Content</TabsTrigger>
                 <TabsTrigger value="templates"><LayoutTemplate className="w-4 h-4 mr-2"/>Templates</TabsTrigger>
                 <TabsTrigger value="theme"><Palette className="w-4 h-4 mr-2"/>Theme</TabsTrigger>
+                <TabsTrigger value="suggestions"><Sparkles className="w-4 h-4 mr-2"/>Suggestions</TabsTrigger>
               </TabsList>
             </div>
             
@@ -1198,6 +1300,97 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
                   </div>
                 </div>
               </TabsContent>
+              <TabsContent value="suggestions" className="mt-0 space-y-4">
+                <div className="p-4 bg-primary/5 rounded-xl border border-primary/10 flex items-center justify-between mb-4 mt-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-primary animate-pulse" />
+                    <div className="text-left">
+                      <span className="font-bold text-sm text-primary">AI Writer Assistant</span>
+                      <p className="text-xs text-muted-foreground">Scan for grammatical, structural, and metrics improvements.</p>
+                    </div>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    onClick={async () => {
+                      setIsAnalyzingSuggestions(true);
+                      try {
+                        const data = await generateSuggestionsAction(resume);
+                        setSuggestions(data);
+                        showSuccess('Suggestions updated!');
+                      } catch {
+                        showError('Failed to generate suggestions.');
+                      } finally {
+                        setIsAnalyzingSuggestions(false);
+                      }
+                    }}
+                    disabled={isAnalyzingSuggestions}
+                  >
+                    {isAnalyzingSuggestions ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Scan'}
+                  </Button>
+                </div>
+
+                {suggestions.length > 0 && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleApplyAll}
+                    className="w-full text-xs font-semibold text-primary border-primary/20 hover:bg-primary/5 h-9"
+                  >
+                    Apply All Suggestions
+                  </Button>
+                )}
+
+                <div className="space-y-4">
+                  {suggestions.length > 0 ? (
+                    suggestions.map((sug) => (
+                      <Card key={sug.id} className="rounded-xl border-border p-4 space-y-3">
+                        <div className="flex justify-between items-start">
+                          <span className="font-bold text-[10px] uppercase tracking-wider text-muted-foreground bg-secondary px-2 py-0.5 rounded">
+                            {sug.category} Improvement
+                          </span>
+                        </div>
+                        <p className="text-xs text-left text-slate-700 leading-relaxed font-semibold italic">"{sug.reason}"</p>
+                        
+                        <div className="grid grid-cols-1 gap-2 text-xs pt-1 text-left">
+                          <div className="p-2 bg-red-50/50 rounded border border-red-100">
+                            <span className="font-bold text-red-700 block mb-0.5">Current:</span>
+                            <span className="line-through block truncate">{sug.currentText}</span>
+                          </div>
+                          <div className="p-2 bg-emerald-50/50 rounded border border-emerald-100">
+                            <span className="font-bold text-emerald-700 block mb-0.5">Suggested:</span>
+                            <span className="block truncate">{sug.suggestedText}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 justify-end pt-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-xs h-8"
+                            onClick={() => setSuggestions(prev => prev.filter(s => s.id !== sug.id))}
+                          >
+                            Ignore
+                          </Button>
+                          <Button 
+                            variant="default" 
+                            size="sm" 
+                            className="text-xs h-8 text-white"
+                            onClick={() => handleApplySuggestion(sug)}
+                          >
+                            Apply
+                          </Button>
+                        </div>
+                      </Card>
+                    ))
+                  ) : (
+                    <div className="py-12 text-center text-muted-foreground">
+                      <HelpCircle className="h-12 w-12 text-muted-foreground mx-auto mb-2 opacity-50" />
+                      <p className="text-sm font-semibold">No suggestions currently loaded.</p>
+                      <p className="text-xs mt-1">Click the Scan button above to analyze your resume contents.</p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
             </div>
           </Tabs>
         </div>
@@ -1212,6 +1405,13 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Hidden Resume Preview for Export Generation */}
+      <div className="absolute top-0 left-0 w-0 h-0 overflow-hidden pointer-events-none opacity-0 -z-50">
+        <div id="resume-export-preview-hidden">
+          <ResumePreview resume={resume} />
         </div>
       </div>
     </div>

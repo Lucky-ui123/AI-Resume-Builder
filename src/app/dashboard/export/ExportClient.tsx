@@ -5,8 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Download, FileText, FileIcon, FileOutput, CheckCircle2, AlertCircle, LayoutTemplate } from 'lucide-react';
-import { generatePDF, generateDOCX, generateTXT } from '@/lib/export-utils';
+import { Download, FileIcon, FileOutput, CheckCircle2, AlertCircle, LayoutTemplate } from 'lucide-react';
+import { generatePDF } from '@/lib/export-utils';
 import { ResumePreview, LayoutType } from '@/components/resume/ResumePreview';
 import { Resume } from '@/types';
 
@@ -16,7 +16,6 @@ export default function ExportClient({ hasAdvancedTemplates, resume }: { hasAdva
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [format, setFormat] = useState('pdf');
   const [layout, setLayout] = useState<LayoutType>('classic-ats');
 
   const handleExport = async () => {
@@ -36,17 +35,17 @@ export default function ExportClient({ hasAdvancedTemplates, resume }: { hasAdva
         throw new Error('Failed to check export limit');
       }
 
-      const filename = `resume_${resume.personalInfo.firstName.toLowerCase()}_${resume.personalInfo.lastName.toLowerCase()}_${layout}.${format}`;
+      const formatName = (name: string) => {
+        if (!name) return '';
+        const trimmed = name.trim();
+        return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+      };
+
+      const firstName = formatName(resume.personalInfo.firstName) || 'Firstname';
+      const lastName = formatName(resume.personalInfo.lastName) || 'Lastname';
+      const filename = `${firstName}_${lastName}_Resume.pdf`;
       
-      if (format === 'pdf') {
-        await generatePDF('resume-export-preview', filename);
-      } else if (format === 'docx') {
-        // DOCX always uses its own robust layout generator
-        await generateDOCX(resume, filename);
-      } else if (format === 'txt') {
-        // TXT is plain text
-        generateTXT(resume, filename);
-      }
+      await generatePDF('resume-export-preview', filename);
       
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 3000);
@@ -94,7 +93,7 @@ export default function ExportClient({ hasAdvancedTemplates, resume }: { hasAdva
           <CardContent className="space-y-6">
             
             <div className="space-y-2.5">
-              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Design Template (PDF Only)</Label>
+              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Design Template</Label>
               <Select value={layout} onValueChange={(val) => val && setLayout(val as LayoutType)}>
                 <SelectTrigger className="h-11 shadow-sm font-medium">
                   <SelectValue placeholder="Select template" />
@@ -119,60 +118,14 @@ export default function ExportClient({ hasAdvancedTemplates, resume }: { hasAdva
               </Select>
             </div>
 
-            <div className="space-y-2.5">
-              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Format</Label>
-              <Select value={format} onValueChange={(val) => val && setFormat(val)}>
-                <SelectTrigger className="h-11 shadow-sm font-medium">
-                  <SelectValue placeholder="Select format" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pdf">
-                    <div className="flex items-center gap-2 font-semibold">
-                      <div className="bg-destructive/10 p-1 rounded">
-                        <FileIcon className="h-4 w-4 text-destructive" /> 
-                      </div>
-                      PDF Document (.pdf)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="docx">
-                    <div className="flex items-center gap-2 font-semibold">
-                      <div className="bg-primary/20 p-1 rounded">
-                        <FileText className="h-4 w-4 text-primary" />
-                      </div>
-                      MS Word (.docx)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="txt">
-                    <div className="flex items-center gap-2 font-semibold">
-                      <div className="bg-muted p-1 rounded">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      Plain Text (.txt)
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="p-5 bg-accent/5 rounded-[16px] text-[14px] text-foreground/80 border border-accent/20 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-accent/10 rounded-full blur-xl pointer-events-none" />
+              <p className="font-bold text-accent mb-2 tracking-tight flex items-center gap-2">
+                <FileIcon className="h-4 w-4 text-destructive" />
+                PDF Export Options
+              </p>
+              PDFs are generated using the exact layout selected above, ensuring ATS compatibility and perfect styling.
             </div>
-            
-            {format === 'pdf' && (
-              <div className="p-5 bg-accent/5 rounded-[16px] text-[14px] text-foreground/80 border border-accent/20 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-accent/10 rounded-full blur-xl pointer-events-none" />
-                <p className="font-bold text-accent mb-2 tracking-tight flex items-center gap-2">
-                  <FileIcon className="h-4 w-4" />
-                  PDF Export Options
-                </p>
-                PDFs are generated using the exact layout selected above, ensuring ATS compatibility and perfect styling.
-              </div>
-            )}
-            {format !== 'pdf' && (
-              <div className="p-5 bg-warning-muted rounded-[16px] text-[14px] text-warning font-medium border border-warning/20 shadow-sm">
-                <p className="font-bold mb-1 tracking-tight flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4" />
-                  Note on Formatting
-                </p>
-                DOCX and TXT exports use standard structural parsing. Visual design templates only apply to PDF format.
-              </div>
-            )}
           </CardContent>
           <CardFooter className="bg-secondary rounded-b-2xl border-t flex-col items-stretch gap-3">
             {exportError && exportError !== 'EXPORT_LIMIT_REACHED' && (
@@ -193,7 +146,7 @@ export default function ExportClient({ hasAdvancedTemplates, resume }: { hasAdva
               {isExporting ? (
                 <><Download className="mr-2 h-5 w-5 animate-pulse" /> Preparing Export...</>
               ) : (
-                <><Download className="mr-2 h-5 w-5" /> Download {format.toUpperCase()}</>
+                <><Download className="mr-2 h-5 w-5" /> Download PDF</>
               )}
             </Button>
           </CardFooter>

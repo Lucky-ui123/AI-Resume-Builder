@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
-export default function AiSuggestionsRedirectPage() {
+export default function SuggestionsRedirectPage() {
   redirect('/dashboard/builder');
 }

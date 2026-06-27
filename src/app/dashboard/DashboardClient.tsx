@@ -1,21 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Resume } from '@/types';
-import { 
-  Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription 
-} from '@/components/ui/card';
+import { useState, useEffect } from 'react';
+import { Resume, MatchReport, AtsReport, CoverLetter } from '@/types';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { 
-  FileText, MoreVertical, Edit3, Copy, Trash2, Download, 
-  History, Plus, UploadCloud, FileEdit, Clock, Target, Loader2
-} from 'lucide-react';
-import { 
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, 
-  DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuGroup 
-} from '@/components/ui/dropdown-menu';
 import { 
   Dialog, DialogContent, DialogDescription, DialogFooter, 
   DialogHeader, DialogTitle 
@@ -23,19 +14,30 @@ import {
 import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle
 } from '@/components/ui/sheet';
-import { useRouter } from 'next/navigation';
 import { 
-  deleteResumeAction, renameResumeAction, duplicateResumeAction, 
-  deleteVersionAction, restoreVersionAction 
-} from './actions';
-import { getResumeVersionsAction, saveResumeVersionAction } from '../builder/actions';
-import { formatDistanceToNow } from 'date-fns';
-import { showSuccess, showError, showLoading, dismissToast } from '@/lib/toast';
+  FileText, Target, TrendingUp, Briefcase, Plus, Clock, History, Loader2
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ResumeCard } from '@/components/dashboard/ResumeCard';
+import { CreateResumeDialog } from '@/components/dashboard/CreateResumeDialog';
 import { ResumePreview } from '@/components/resume/ResumePreview';
 import { useResumes } from '@/context/ResumeContext';
+import { deleteVersionAction, restoreVersionAction } from './resumes/actions';
+import { getResumeVersionsAction, saveResumeVersionAction } from './builder/actions';
+import { showSuccess, showError, showLoading, dismissToast } from '@/lib/toast';
+import { formatDistanceToNow } from 'date-fns';
 
-export default function ResumesClient() {
+interface DashboardClientProps {
+  stats: {
+    totalResumes: number;
+    latestAtsScore: number;
+    coverLetters: number;
+  };
+  userName: string;
+}
+
+export default function DashboardClient({ stats, userName }: DashboardClientProps) {
   const router = useRouter();
   const { 
     resumes, 
@@ -44,24 +46,51 @@ export default function ResumesClient() {
     deleteResume, 
     duplicateResume 
   } = useResumes();
-  
+
   // Dialog States
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [newVersionDialogOpen, setNewVersionDialogOpen] = useState(false);
   const [versionsDrawerOpen, setVersionsDrawerOpen] = useState(false);
-  
+
   // Target Resume State
   const [activeResume, setActiveResume] = useState<Resume | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [versionName, setVersionName] = useState('');
   const [versions, setVersions] = useState<{id: string, name: string, created_at: string}[]>([]);
-  
+
+  // Career Modules States
+  const [matchReports, setMatchReports] = useState<MatchReport[]>([]);
+  const [atsReports, setAtsReports] = useState<AtsReport[]>([]);
+  const [coverLetters, setCoverLetters] = useState<CoverLetter[]>([]);
+
   // Loading States
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
   const [exportingResume, setExportingResume] = useState<Resume | null>(null);
   const [isExportingPDF, setIsExportingPDF] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadCareerData = async () => {
+      if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+        const { getMatchReportsAction, getAtsReportsAction, getCoverLettersAction } = await import('./career-actions');
+        const [mr, ats, cl] = await Promise.all([
+          getMatchReportsAction(),
+          getAtsReportsAction(),
+          getCoverLettersAction()
+        ]);
+        setMatchReports(mr);
+        setAtsReports(ats);
+        setCoverLetters(cl);
+      } else {
+        const { lsGetMatchReports, lsGetAtsReports, lsGetCoverLetters } = await import('@/lib/local-storage-service');
+        setMatchReports(lsGetMatchReports());
+        setAtsReports(lsGetAtsReports());
+        setCoverLetters(lsGetCoverLetters());
+      }
+    };
+    loadCareerData();
+  }, []);
 
   const handleEdit = (resume: Resume) => {
     router.push(`/dashboard/builder?id=${resume.id}`);
@@ -238,88 +267,227 @@ export default function ResumesClient() {
     }
   };
 
-  if (contextLoading && resumes.length === 0) {
-    return (
-      <div className="py-8 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[200px]">
-        <Loader2 className="animate-spin h-8 w-8 text-primary mb-2" />
-        <span>Loading resumes...</span>
-      </div>
-    );
-  }
-
-  if (resumes.length === 0) {
-    return (
-      <div className="p-8 w-full space-y-6 pb-12">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-primary/10 p-2.5 rounded-xl shadow-sm border border-primary/10">
-            <FileText className="h-7 w-7 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">My Resumes</h1>
-            <p className="text-muted-foreground mt-1 text-lg">Manage and organize your saved resumes.</p>
-          </div>
-        </div>
-      </div>
-        
-        <div className="flex flex-col items-center justify-center py-20 text-center border border-dashed border-border rounded-2xl bg-card/50">
-          <FileText className="h-16 w-16 text-muted-foreground mb-4 opacity-50" />
-          <h3 className="text-xl font-semibold mb-2">No resumes yet</h3>
-          <p className="text-muted-foreground mb-6 max-w-sm">
-            Create your first resume to start matching with jobs and generating cover letters.
-          </p>
-          <div className="flex items-center gap-4">
-            <Button onClick={() => router.push('/dashboard/builder?id=new')}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create New
-            </Button>
-            <Button variant="outline" onClick={() => router.push('/dashboard/upload')}>
-              <UploadCloud className="mr-2 h-4 w-4" />
-              Upload Existing
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const recentResumes = resumes.slice(0, 3);
+  const profileStrength = Math.min(100, 40 + (resumes.length * 15));
+  
+  let atsFeedback = "Needs improvement";
+  if (stats.latestAtsScore >= 80) atsFeedback = "Excellent fit for recent roles";
+  else if (stats.latestAtsScore >= 60) atsFeedback = "Good fit for recent roles";
 
   return (
-    <div className="p-8 w-full space-y-6 pb-12 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-primary/10 p-2.5 rounded-xl shadow-sm border border-primary/10">
-            <FileText className="h-7 w-7 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">My Resumes</h1>
-            <p className="text-muted-foreground mt-1 text-lg">Manage and organize your saved resumes.</p>
-          </div>
+    <div className="p-8 max-w-7xl mx-auto space-y-10">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {userName.split(' ')[0]}</h1>
+          <p className="text-muted-foreground mt-1">Here is what is happening with your job search today.</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => router.push('/dashboard/upload')}>
-            <UploadCloud className="h-4 w-4 mr-2" /> Upload
-          </Button>
-          <Button size="sm" onClick={() => router.push('/dashboard/builder?id=new')}>
-            <Plus className="h-4 w-4 mr-2" /> New Resume
-          </Button>
+        <div className="flex flex-wrap gap-3">
+          <Link href="/dashboard/matcher">
+            <Button variant="outline">Match Job</Button>
+          </Link>
+          <CreateResumeDialog />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {resumes.map((resume) => (
-          <ResumeCard
-            key={resume.id}
-            resume={resume}
-            onEdit={handleEdit}
-            onRename={openRenameDialog}
-            onDuplicate={handleDuplicate}
-            onDelete={openDeleteDialog}
-            onExport={handleExport}
-            onSaveVersion={openNewVersionDialog}
-            onViewVersions={openVersionsDrawer}
-            isExporting={isExportingPDF === resume.id}
-          />
-        ))}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-medium">Profile Strength</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{profileStrength}%</div>
+            <Progress value={profileStrength} className="mt-3 h-1.5" />
+            <p className="text-xs text-muted-foreground mt-3">
+              Based on your active resumes
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-medium">Avg ATS Score</CardTitle>
+            <Target className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.latestAtsScore}/100</div>
+            <p className="text-xs text-muted-foreground mt-3 font-medium">
+              {atsFeedback}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-medium">Resumes Created</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{resumes.length}</div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Total created so far
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-medium">Cover Letters</CardTitle>
+            <Briefcase className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.coverLetters}</div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Total generated so far
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex justify-between items-end">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Recent Resumes</h2>
+            <p className="text-muted-foreground text-sm">Your most recently edited resumes.</p>
+          </div>
+          {resumes.length > 0 && (
+            <Link href="/dashboard/resumes">
+              <Button variant="outline" size="sm">
+                View All
+              </Button>
+            </Link>
+          )}
+        </div>
+        
+        {!contextLoading ? (
+          recentResumes.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {recentResumes.map((resume) => (
+                <ResumeCard
+                  key={resume.id}
+                  resume={resume}
+                  onEdit={handleEdit}
+                  onRename={openRenameDialog}
+                  onDuplicate={handleDuplicate}
+                  onDelete={openDeleteDialog}
+                  onExport={handleExport}
+                  onSaveVersion={openNewVersionDialog}
+                  onViewVersions={openVersionsDrawer}
+                  isExporting={isExportingPDF === resume.id}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center border border-dashed border-border rounded-2xl bg-card/50">
+              <FileText className="h-16 w-16 text-muted-foreground mb-4 opacity-50" />
+              <h3 className="text-xl font-semibold mb-2">No resumes yet</h3>
+              <p className="text-muted-foreground mb-6 max-w-sm">
+                Create your first resume to start matching with jobs and generating cover letters.
+              </p>
+              <CreateResumeDialog />
+            </div>
+          )
+        ) : (
+          <div className="py-8 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[200px]">
+            <Loader2 className="animate-spin h-8 w-8 text-primary mb-2" />
+            <span>Loading recent resumes...</span>
+          </div>
+        )}
+      </div>
+
+      {/* Career Platform Modules */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-4">
+        {/* Job Matcher Overview Card */}
+        <Card className="rounded-2xl border-border flex flex-col h-full">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Target className="h-5 w-5 text-primary" /> Job Matcher
+            </CardTitle>
+            <CardDescription>Evaluate alignment with target job descriptions.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 space-y-3">
+            {matchReports.length > 0 ? (
+              matchReports.slice(0, 2).map((r) => (
+                <div key={r.id} className="p-3 border rounded-xl flex justify-between items-center text-xs">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-bold text-foreground block truncate">{r.jobTitle}</span>
+                    <span className="text-muted-foreground block truncate">{r.companyName}</span>
+                  </div>
+                  <span className="bg-primary/10 text-primary font-black px-2 py-0.5 rounded-full shrink-0 ml-2">{r.matchScore}%</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground italic py-4">No recent job matches run.</p>
+            )}
+          </CardContent>
+          <CardFooter className="pt-2 border-t bg-secondary/10 rounded-b-2xl">
+            <Link href="/dashboard/matcher" className="w-full">
+              <Button variant="ghost" size="sm" className="w-full text-xs font-semibold">
+                Go to Job Matcher
+              </Button>
+            </Link>
+          </CardFooter>
+        </Card>
+
+        {/* ATS Reports Overview Card */}
+        <Card className="rounded-2xl border-border flex flex-col h-full">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" /> ATS Audits
+            </CardTitle>
+            <CardDescription>Analyze keyword density and formatting.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 space-y-3">
+            {atsReports.length > 0 ? (
+              atsReports.slice(0, 2).map((r) => (
+                <div key={r.id} className="p-3 border rounded-xl flex justify-between items-center text-xs">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-bold text-foreground block truncate">{r.resumeTitle}</span>
+                    <span className="text-muted-foreground block truncate">Scanned {new Date(r.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <span className="bg-primary/10 text-primary font-black px-2 py-0.5 rounded-full shrink-0 ml-2">{r.overallScore}%</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground italic py-4">No recent ATS compatibility scans.</p>
+            )}
+          </CardContent>
+          <CardFooter className="pt-2 border-t bg-secondary/10 rounded-b-2xl">
+            <Link href="/dashboard/ats" className="w-full">
+              <Button variant="ghost" size="sm" className="w-full text-xs font-semibold">
+                Go to ATS Analyzer
+              </Button>
+            </Link>
+          </CardFooter>
+        </Card>
+
+        {/* Cover Letters Overview Card */}
+        <Card className="rounded-2xl border-border flex flex-col h-full">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Briefcase className="h-5 w-5 text-primary" /> Cover Letters
+            </CardTitle>
+            <CardDescription>Draft customized cover letters with AI.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 space-y-3">
+            {coverLetters.length > 0 ? (
+              coverLetters.slice(0, 2).map((l) => (
+                <div key={l.id} className="p-3 border rounded-xl text-xs space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-foreground block truncate">{l.title}</span>
+                  </div>
+                  <span className="text-muted-foreground block truncate">{l.companyName} • {l.tone} Tone</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground italic py-4">No cover letters generated yet.</p>
+            )}
+          </CardContent>
+          <CardFooter className="pt-2 border-t bg-secondary/10 rounded-b-2xl">
+            <Link href="/dashboard/cover-letters" className="w-full">
+              <Button variant="ghost" size="sm" className="w-full text-xs font-semibold">
+                Manage Cover Letters
+              </Button>
+            </Link>
+          </CardFooter>
+        </Card>
       </div>
 
       {/* Hidden Resume Preview for PDF Generation */}
@@ -405,7 +573,7 @@ export default function ResumesClient() {
           <div className="space-y-4">
             {isLoadingVersions ? (
               <div className="py-8 text-center text-muted-foreground flex flex-col items-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
+                <Loader2 className="animate-spin h-8 w-8 text-primary mb-2" />
                 Loading versions...
               </div>
             ) : versions.length === 0 ? (

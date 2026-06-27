@@ -23,7 +23,7 @@ const plans = [
     features: [
       'Unlimited resumes',
       'Premium templates',
-      'PDF & DOCX Export',
+      'PDF Export',
       'Basic AI Rewrite (50/mo)',
       'Job Description Matcher',
       'Priority support',

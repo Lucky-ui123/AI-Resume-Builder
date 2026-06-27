@@ -11,9 +11,12 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const isSupabaseConfigured = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (isSupabaseConfigured) {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const formData = await req.formData();
     const file = formData.get('file') as File | null;

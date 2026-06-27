@@ -176,3 +176,186 @@ export function lsDuplicateResume(id: string): {
 export function isLocalId(id: string): boolean {
   return typeof id === 'string' && id.startsWith('ls_');
 }
+
+// ---------------------------------------------------------------------------
+// Match Reports Local Storage Operations
+// ---------------------------------------------------------------------------
+const MATCH_KEY = 'hirecraft_match_reports';
+
+export function lsSaveMatchReport(report: Omit<MatchReport, 'id' | 'created_at'> & { id?: string }): MatchReport {
+  const reports = lsGetMatchReports();
+  const id = report.id || `mr_${Math.random().toString(36).substr(2, 9)}`;
+  const newReport: MatchReport = {
+    ...report,
+    id,
+    created_at: new Date().toISOString()
+  };
+  localStorage.setItem(MATCH_KEY, JSON.stringify([newReport, ...reports]));
+  return newReport;
+}
+
+export function lsGetMatchReports(): MatchReport[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(MATCH_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function lsDeleteMatchReport(id: string): { error: string | null } {
+  try {
+    const reports = lsGetMatchReports().filter(r => r.id !== id);
+    localStorage.setItem(MATCH_KEY, JSON.stringify(reports));
+    return { error: null };
+  } catch (e) {
+    return { error: String(e) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ATS Reports Local Storage Operations
+// ---------------------------------------------------------------------------
+const ATS_KEY = 'hirecraft_ats_reports';
+
+export function lsSaveAtsReport(report: Omit<AtsReport, 'id' | 'created_at'> & { id?: string }): AtsReport {
+  const reports = lsGetAtsReports();
+  const id = report.id || `ats_${Math.random().toString(36).substr(2, 9)}`;
+  const newReport: AtsReport = {
+    ...report,
+    id,
+    created_at: new Date().toISOString()
+  };
+  localStorage.setItem(ATS_KEY, JSON.stringify([newReport, ...reports]));
+  return newReport;
+}
+
+export function lsGetAtsReports(): AtsReport[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(ATS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function lsDeleteAtsReport(id: string): { error: string | null } {
+  try {
+    const reports = lsGetAtsReports().filter(r => r.id !== id);
+    localStorage.setItem(ATS_KEY, JSON.stringify(reports));
+    return { error: null };
+  } catch (e) {
+    return { error: String(e) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cover Letters Local Storage Operations
+// ---------------------------------------------------------------------------
+const LETTER_KEY = 'hirecraft_cover_letters';
+
+export function lsSaveCoverLetter(letter: CoverLetter): CoverLetter {
+  const letters = lsGetCoverLetters();
+  const isNew = !letter.id || letter.id === 'new';
+  const id = isNew ? `cl_${Math.random().toString(36).substr(2, 9)}` : letter.id;
+  const updatedLetter: CoverLetter = {
+    ...letter,
+    id,
+    lastModified: new Date().toISOString()
+  };
+  
+  if (isNew) {
+    localStorage.setItem(LETTER_KEY, JSON.stringify([updatedLetter, ...letters]));
+  } else {
+    const idx = letters.findIndex(l => l.id === letter.id);
+    if (idx >= 0) {
+      letters[idx] = updatedLetter;
+    } else {
+      letters.unshift(updatedLetter);
+    }
+    localStorage.setItem(LETTER_KEY, JSON.stringify(letters));
+  }
+  return updatedLetter;
+}
+
+export function lsGetCoverLetters(): CoverLetter[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LETTER_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function lsDeleteCoverLetter(id: string): { error: string | null } {
+  try {
+    const letters = lsGetCoverLetters().filter(l => l.id !== id);
+    localStorage.setItem(LETTER_KEY, JSON.stringify(letters));
+    return { error: null };
+  } catch (e) {
+    return { error: String(e) };
+  }
+}
+
+export function lsRenameCoverLetter(id: string, newTitle: string): { error: string | null } {
+  try {
+    const letters = lsGetCoverLetters();
+    const idx = letters.findIndex(l => l.id === id);
+    if (idx < 0) return { error: 'Cover letter not found' };
+    letters[idx] = { ...letters[idx], title: newTitle, lastModified: new Date().toISOString() };
+    localStorage.setItem(LETTER_KEY, JSON.stringify(letters));
+    return { error: null };
+  } catch (e) {
+    return { error: String(e) };
+  }
+}
+
+export function lsDuplicateCoverLetter(id: string): { newId: string | null; error: string | null } {
+  try {
+    const letters = lsGetCoverLetters();
+    const original = letters.find(l => l.id === id);
+    if (!original) return { newId: null, error: 'Cover letter not found' };
+    const newId = `cl_${Math.random().toString(36).substr(2, 9)}`;
+    const copy: CoverLetter = {
+      ...original,
+      id: newId,
+      title: `${original.title} (Copy)`,
+      lastModified: new Date().toISOString()
+    };
+    localStorage.setItem(LETTER_KEY, JSON.stringify([copy, ...letters]));
+    return { newId, error: null };
+  } catch (e) {
+    return { newId: null, error: String(e) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Resume Suggestions Local Storage Operations
+// ---------------------------------------------------------------------------
+const SUGGESTIONS_KEY = 'hirecraft_suggestions';
+
+export function lsSaveSuggestions(resumeId: string, suggestions: ResumeSuggestion[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = localStorage.getItem(SUGGESTIONS_KEY);
+    const all = raw ? JSON.parse(raw) : {};
+    all[resumeId] = suggestions;
+    localStorage.setItem(SUGGESTIONS_KEY, JSON.stringify(all));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+export function lsGetSuggestions(resumeId: string): ResumeSuggestion[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(SUGGESTIONS_KEY);
+    const all = raw ? JSON.parse(raw) : {};
+    return all[resumeId] || [];
+  } catch {
+    return [];
+  }
+}

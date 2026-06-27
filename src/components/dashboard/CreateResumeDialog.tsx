@@ -15,11 +15,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Loader2 } from 'lucide-react';
-import { createResumeAction } from '@/app/dashboard/builder/actions';
 import { showSuccess, showError, showLoading, dismissToast } from '@/lib/toast';
+import { useResumes } from '@/context/ResumeContext';
 
 export function CreateResumeDialog() {
   const router = useRouter();
+  const { createResume } = useResumes();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [targetRole, setTargetRole] = useState('');
@@ -37,7 +38,7 @@ export function CreateResumeDialog() {
     const loadingToastId = showLoading('Creating resume...');
     
     try {
-      const { id, error } = await createResumeAction(title.trim(), targetRole.trim());
+      const { id, error } = await createResume(title.trim(), targetRole.trim());
       
       dismissToast(loadingToastId);
       
@@ -46,10 +47,12 @@ export function CreateResumeDialog() {
       } else if (id) {
         showSuccess('Resume created successfully');
         setOpen(false);
+        setTitle('');
+        setTargetRole('');
         // Navigate to builder with the new resume ID
         router.push(`/dashboard/builder?id=${id}`);
       }
-    } catch (err) {
+    } catch {
       dismissToast(loadingToastId);
       showError('Something went wrong.');
     } finally {

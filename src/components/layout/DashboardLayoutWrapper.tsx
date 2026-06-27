@@ -5,6 +5,7 @@ import DashboardSidebar from '@/components/layout/DashboardSidebar';
 import { Menu, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ResumeProvider } from '@/context/ResumeContext';
 
 export default function DashboardLayoutWrapper({
   children,
@@ -21,7 +22,8 @@ export default function DashboardLayoutWrapper({
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
-    <div className="flex h-[100dvh] bg-background overflow-hidden font-sans">
+    <ResumeProvider>
+      <div className="flex h-[100dvh] bg-background overflow-hidden font-sans">
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 
@@ -67,5 +69,6 @@ export default function DashboardLayoutWrapper({
         </main>
       </div>
     </div>
+    </ResumeProvider>
   );
 }

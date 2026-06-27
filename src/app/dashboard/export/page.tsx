@@ -1,6 +1,5 @@
 import ExportClient from './ExportClient';
 import { getUserSubscription, getResume, getAllResumes } from '@/lib/db-service';
-import { redirect } from 'next/navigation';
 import { Resume } from '@/types';
 import Link from 'next/link';
 import { FileText, Plus } from 'lucide-react';

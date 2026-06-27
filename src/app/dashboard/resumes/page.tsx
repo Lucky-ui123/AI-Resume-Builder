@@ -1,4 +1,3 @@
-import { getAllResumes } from '@/lib/db-service';
 import ResumesClient from './ResumesClient';
 import { Metadata } from 'next';
 
@@ -7,8 +6,6 @@ export const metadata: Metadata = {
   description: 'Manage your saved resumes.',
 };
 
-export default async function ResumesPage() {
-  const resumes = await getAllResumes();
-
-  return <ResumesClient initialResumes={resumes} />;
+export default function ResumesPage() {
+  return <ResumesClient />;
 }

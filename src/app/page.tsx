@@ -6,7 +6,6 @@ import {
   Target,
   Zap,
   Shield,
-  ChevronRight,
   CheckCircle2,
   ArrowRight,
 } from "lucide-react";
@@ -21,7 +20,7 @@ export default async function LandingPage() {
       if (user) {
         redirect("/dashboard");
       }
-    } catch (error) {
+    } catch {
       // Safely ignore if auth check fails
     }
   }
@@ -168,7 +167,7 @@ export default async function LandingPage() {
                     AI Content Generation
                   </h3>
                   <p className="text-muted-foreground leading-relaxed max-w-md">
-                    Struggling with writer's block? Our AI analyzes your role
+                    Struggling with writer&apos;s block? Our AI analyzes your role
                     and generates professional summaries and bullet points that
                     highlight your impact and achievements.
                   </p>
