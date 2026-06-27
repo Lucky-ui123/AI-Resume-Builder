@@ -87,7 +87,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
       updated.personalInfo.linkedin = sug.suggestedText;
     } else if (sug.targetField === 'skills') {
       previousText = updated.skills?.map(s => typeof s === 'string' ? s : s.name).join(', ') || '';
-      updated.skills = sug.suggestedText.split(',').map(s => ({ id: crypto.randomUUID(), name: s.trim() }));
+      updated.skills = sug.suggestedText.split(',').map(s => ({ id: crypto.randomUUID(), name: s.trim(), category: 'Hard' as const }));
     } else if (sug.targetField.startsWith('experience[')) {
       const match = sug.targetField.match(/experience\[(\d+)\]\.description/);
       if (match && updated.experience) {
@@ -116,7 +116,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
     } else if (sug.targetField === 'personalInfo.linkedin') {
       updated.personalInfo.linkedin = previousText;
     } else if (sug.targetField === 'skills') {
-      updated.skills = previousText.split(',').map(s => ({ id: crypto.randomUUID(), name: s.trim() }));
+      updated.skills = previousText.split(',').map(s => ({ id: crypto.randomUUID(), name: s.trim(), category: 'Hard' as const }));
     } else if (sug.targetField.startsWith('experience[')) {
       const match = sug.targetField.match(/experience\[(\d+)\]\.description/);
       if (match && updated.experience) {
