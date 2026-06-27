@@ -79,12 +79,12 @@ export default function TemplatesClient() {
               {/* Badges Overlay */}
               <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
                 {template.atsScore >= 90 && (
-                  <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100 font-semibold border-green-200 shadow-sm">
+                  <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100 font-semibold border-green-200 shadow-sm h-6 px-2.5 rounded-full text-xs">
                     {template.atsScore}% ATS
                   </Badge>
                 )}
                 {template.popular && (
-                  <Badge variant="secondary" className="bg-orange-100 text-orange-700 hover:bg-orange-100 font-semibold border-orange-200 shadow-sm">
+                  <Badge variant="secondary" className="bg-orange-100 text-orange-700 hover:bg-orange-100 font-semibold border-orange-200 shadow-sm h-6 px-2.5 rounded-full text-xs">
                     Popular
                   </Badge>
                 )}
@@ -95,7 +95,7 @@ export default function TemplatesClient() {
               <div className="flex justify-between items-start">
                 <CardTitle className="text-lg font-bold tracking-tight">{template.name}</CardTitle>
                 {template.isPremium && (
-                  <Badge variant="secondary" className="bg-warning-muted text-warning border-warning/20 font-bold tracking-wider text-[10px] uppercase">Premium</Badge>
+                  <Badge variant="secondary" className="bg-warning-muted text-warning border-warning/20 font-semibold h-6 px-2.5 rounded-full text-xs">Premium</Badge>
                 )}
               </div>
             </CardHeader>

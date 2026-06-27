@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useDeferredValue } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,8 +14,9 @@ import {
 } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Sparkles, Save, Eye, LayoutPanelLeft, Check, X, Loader2, History, FileEdit, Trash2, Plus, Palette, LayoutTemplate, WifiOff, AlertCircle, Clock, Download, HelpCircle } from 'lucide-react';
-import { emptyResume, mockResume } from '@/lib/mock-data';
+import { emptyResume } from '@/lib/mock-data';
 import { saveResumeAction, saveResumeVersionAction } from './actions';
 import { Resume, Skill, ResumeSuggestion } from '@/types';
 import { ResumePreview } from '@/components/resume/ResumePreview';
@@ -26,6 +27,8 @@ import { TemplateMiniPreview } from '@/components/resume/TemplateMiniPreview';
 import { generatePDF } from '@/lib/export-utils';
 import { generateSuggestionsAction } from '../career-actions';
 import { useResumes } from '@/context/ResumeContext';
+import { SuggestionsDashboard } from './SuggestionsDashboard';
+import { ResumeScores } from '@/types';
 
 type SaveState = 'clean' | 'editing' | 'saving' | 'saved' | 'error' | 'offline';
 
@@ -34,6 +37,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
   const searchParams = useSearchParams();
   const { saveResume } = useResumes();
   const [resume, setResume] = useState<Resume>(initialResume || emptyResume);
+  const deferredResume = useDeferredValue(resume);
   const [showPreviewMobile, setShowPreviewMobile] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [suggestions, setSuggestions] = useState<ResumeSuggestion[]>([]);
@@ -44,43 +48,97 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
   const [hasUnsyncedChanges, setHasUnsyncedChanges] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
 
+  // AI Generation State
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  const [generatePrompt, setGeneratePrompt] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  const [scores, setScores] = useState<ResumeScores | undefined>(undefined);
+  const [undoStack, setUndoStack] = useState<Record<string, string>>({});
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
+
+  // Debounced auto-scan
+  useEffect(() => {
+    const handler = setTimeout(async () => {
+      if (!resume.id) return;
+      setIsAnalyzingSuggestions(true);
+      try {
+        const data = await generateSuggestionsAction(resume);
+        setScores(data.scores);
+        setSuggestions(data.suggestions.filter(s => !dismissedSuggestions.has(s.id)));
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setIsAnalyzingSuggestions(false);
+      }
+    }, 1500); // Wait 1.5s after typing stops
+    return () => clearTimeout(handler);
+  }, [resume, dismissedSuggestions]);
+
   const handleApplySuggestion = (sug: ResumeSuggestion) => {
     const updated = { ...resume };
+    let previousText = '';
+    
     if (sug.targetField === 'summary') {
+      previousText = updated.summary || '';
       updated.summary = sug.suggestedText;
+    } else if (sug.targetField === 'personalInfo.linkedin') {
+      previousText = updated.personalInfo.linkedin || '';
+      updated.personalInfo.linkedin = sug.suggestedText;
+    } else if (sug.targetField === 'skills') {
+      previousText = updated.skills?.map(s => typeof s === 'string' ? s : s.name).join(', ') || '';
+      updated.skills = sug.suggestedText.split(',').map(s => ({ id: crypto.randomUUID(), name: s.trim() }));
     } else if (sug.targetField.startsWith('experience[')) {
       const match = sug.targetField.match(/experience\[(\d+)\]\.description/);
       if (match && updated.experience) {
         const idx = parseInt(match[1]);
         if (updated.experience[idx]) {
+          previousText = updated.experience[idx].description || '';
           updated.experience[idx].description = sug.suggestedText;
         }
       }
     }
+    
+    setUndoStack(prev => ({ ...prev, [sug.id]: previousText }));
     setResume(updated);
-    setSuggestions(prev => prev.filter(s => s.id !== sug.id));
-    showSuccess(`Applied ${sug.category} suggestion!`);
+    showSuccess(`Applied suggestion!`);
   };
 
-  const handleApplyAll = () => {
-    if (suggestions.length === 0) return;
+  const handleUndoSuggestion = (id: string) => {
+    const sug = suggestions.find(s => s.id === id);
+    if (!sug || undoStack[id] === undefined) return;
+    
+    const previousText = undoStack[id];
     const updated = { ...resume };
-    suggestions.forEach(sug => {
-      if (sug.targetField === 'summary') {
-        updated.summary = sug.suggestedText;
-      } else if (sug.targetField.startsWith('experience[')) {
-        const match = sug.targetField.match(/experience\[(\d+)\]\.description/);
-        if (match && updated.experience) {
-          const idx = parseInt(match[1]);
-          if (updated.experience[idx]) {
-            updated.experience[idx].description = sug.suggestedText;
-          }
+    
+    if (sug.targetField === 'summary') {
+      updated.summary = previousText;
+    } else if (sug.targetField === 'personalInfo.linkedin') {
+      updated.personalInfo.linkedin = previousText;
+    } else if (sug.targetField === 'skills') {
+      updated.skills = previousText.split(',').map(s => ({ id: crypto.randomUUID(), name: s.trim() }));
+    } else if (sug.targetField.startsWith('experience[')) {
+      const match = sug.targetField.match(/experience\[(\d+)\]\.description/);
+      if (match && updated.experience) {
+        const idx = parseInt(match[1]);
+        if (updated.experience[idx]) {
+          updated.experience[idx].description = previousText;
         }
       }
-    });
+    }
+    
     setResume(updated);
-    setSuggestions([]);
-    showSuccess(`Applied all ${suggestions.length} suggestions!`);
+    setUndoStack(prev => {
+      const n = { ...prev };
+      delete n[id];
+      return n;
+    });
+    showSuccess('Reverted suggestion');
+  };
+
+  const handleDismissSuggestion = (id: string) => {
+    setDismissedSuggestions(prev => new Set(prev).add(id));
+    setSuggestions(prev => prev.filter(s => s.id !== id));
   };
   
   const initialLoadDone = useRef(false);
@@ -281,35 +339,6 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resume, router, isOnline]);
   
-  const handleSave = async () => {
-    setSaveState('saving');
-    const loadingId = showLoading('Saving changes...');
-    try {
-      const { id, error } = await performSave({ ...resume, isDraft: false });
-      dismissToast(loadingId);
-      if (!error && id) {
-        setResume({ ...resume, id, isDraft: false });
-        setSaveState('saved');
-        setLastSaved(new Date());
-        localStorage.removeItem(`hirecraft_draft_${resume.id || 'new'}`);
-        if (resume.id !== id) {
-          localStorage.removeItem('hirecraft_draft_new');
-        }
-        setHasUnsyncedChanges(false);
-        showSuccess('Changes saved successfully');
-        
-        // Redirect to My Resumes page
-        router.push('/dashboard/resumes');
-      } else {
-        setSaveState('error');
-        showError(error || "Couldn't save your resume. Please try again.");
-      }
-    } catch (err) {
-      dismissToast(loadingId);
-      setSaveState('error');
-      showError('Something went wrong.');
-    }
-  };
 
   const handleSaveVersion = async () => {
     if (!resume.id || resume.id === 'res_123' || resume.id === 'new' || resume.id.startsWith('ls_')) return;
@@ -446,6 +475,49 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
       });
     }
   };
+  const handleGenerateResume = async () => {
+    if (!generatePrompt.trim()) {
+      showError('Please enter a description for your resume.');
+      return;
+    }
+
+    setIsGenerating(true);
+    const loadingId = showLoading('Generating resume with AI... this may take a moment');
+    
+    try {
+      const res = await fetch('/api/ai/generate-resume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: generatePrompt })
+      });
+      
+      const data = await res.json();
+      dismissToast(loadingId);
+      
+      if (data.result) {
+        setResume(prev => ({
+          ...prev,
+          ...data.result,
+          // Ensure we don't overwrite the ID or theme
+          id: prev.id,
+          theme: prev.theme,
+          lastModified: new Date().toISOString()
+        }));
+        showSuccess('Resume generated successfully!');
+        setIsGenerateModalOpen(false);
+        setGeneratePrompt('');
+      } else {
+        showError(data.error || "Failed to generate resume.");
+      }
+    } catch (err) {
+      dismissToast(loadingId);
+      showError("An error occurred during generation.");
+      console.error(err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-muted/10 font-sans relative">
@@ -495,12 +567,34 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
               {showPreviewMobile ? 'Edit' : 'Preview'}
             </Button>
             <div className="flex items-center gap-2">
-              <Button variant="outline" className="shadow-sm font-semibold border-primary/50 text-primary" onClick={() => {
-                setResume({ ...mockResume, id: resume.id, title: 'AI Generated Resume' });
-                showSuccess('Template auto-filled');
-              }}>
-                <Sparkles className="mr-2 h-4 w-4" /> Auto-Fill
-              </Button>
+              <Dialog open={isGenerateModalOpen} onOpenChange={setIsGenerateModalOpen}>
+                <Button variant="default" className="shadow-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground hidden md:flex" onClick={() => setIsGenerateModalOpen(true)}>
+                  <Sparkles className="mr-2 h-4 w-4" /> Fill with AI
+                </Button>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /> Generate Resume with AI</DialogTitle>
+                    <DialogDescription>
+                      Describe yourself, your target role, and your experience. AI will generate a complete resume structure for you.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <Textarea 
+                      placeholder="e.g. Senior Frontend Engineer with 5 years of experience in React and Node.js. Target role is Full Stack Developer. Currently working at Acme Corp." 
+                      className="min-h-[150px]"
+                      value={generatePrompt}
+                      onChange={(e) => setGeneratePrompt(e.target.value)}
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsGenerateModalOpen(false)}>Cancel</Button>
+                    <Button onClick={handleGenerateResume} disabled={isGenerating || !generatePrompt.trim()}>
+                      {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Generate'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
               <Button 
                 variant="outline" 
                 className="shadow-sm font-semibold border-border/50 bg-background hover:bg-accent" 
@@ -513,21 +607,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
               <Button variant="outline" className="shadow-sm font-semibold border-border/50" onClick={handleSaveVersion} disabled={saveState === 'saving' || !resume.id || resume.id === 'res_123'}>
                 <History className="mr-2 h-4 w-4" /> Save Version
               </Button>
-              <div className="flex flex-col items-end mr-2 text-xs font-medium w-[110px]">
-                {saveState === 'offline' && <span className="flex items-center text-orange-500"><WifiOff className="mr-1 h-3 w-3" /> Offline</span>}
-                {saveState === 'error' && <span className="flex items-center text-red-500"><AlertCircle className="mr-1 h-3 w-3" /> Save failed</span>}
-                {saveState === 'saving' && <span className="flex items-center text-primary"><Loader2 className="mr-1 h-3 w-3 animate-spin" /> Saving...</span>}
-                {saveState === 'editing' && <span className="flex items-center text-muted-foreground"><Clock className="mr-1 h-3 w-3" /> Unsaved changes</span>}
-                {(saveState === 'saved' || saveState === 'clean') && (
-                  <span className="flex items-center text-green-600">
-                    <Check className="mr-1 h-3 w-3" /> {resume.isDraft ? 'Draft Saved' : 'Saved'}
-                  </span>
-                )}
-              </div>
-              <Button className="hidden md:flex shadow-sm font-semibold" onClick={handleSave} disabled={saveState === 'saving' || saveState === 'clean' || saveState === 'saved'}>
-                {saveState === 'saving' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Save & Exit
-              </Button>
+
             </div>
           </div>
         </div>
@@ -1215,7 +1295,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
                       </div>
                     </div>
                   ))}
-                  <Button variant="default" className="w-full mt-2 bg-primary/10 text-primary hover:bg-primary/20 border-0" onClick={() => {
+                  <Button variant="outline" className="w-full mt-2" onClick={() => {
                     setResume({
                       ...resume,
                       customSections: [...(resume.customSections || []), { id: Date.now().toString(), title: 'New Section', items: [{ id: Date.now().toString() + '_1', title: '', subtitle: '', date: '', description: '' }] }]
@@ -1300,96 +1380,16 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
                   </div>
                 </div>
               </TabsContent>
-              <TabsContent value="suggestions" className="mt-0 space-y-4">
-                <div className="p-4 bg-primary/5 rounded-xl border border-primary/10 flex items-center justify-between mb-4 mt-2">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-primary animate-pulse" />
-                    <div className="text-left">
-                      <span className="font-bold text-sm text-primary">AI Writer Assistant</span>
-                      <p className="text-xs text-muted-foreground">Scan for grammatical, structural, and metrics improvements.</p>
-                    </div>
-                  </div>
-                  <Button 
-                    size="sm" 
-                    onClick={async () => {
-                      setIsAnalyzingSuggestions(true);
-                      try {
-                        const data = await generateSuggestionsAction(resume);
-                        setSuggestions(data);
-                        showSuccess('Suggestions updated!');
-                      } catch {
-                        showError('Failed to generate suggestions.');
-                      } finally {
-                        setIsAnalyzingSuggestions(false);
-                      }
-                    }}
-                    disabled={isAnalyzingSuggestions}
-                  >
-                    {isAnalyzingSuggestions ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Scan'}
-                  </Button>
-                </div>
-
-                {suggestions.length > 0 && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleApplyAll}
-                    className="w-full text-xs font-semibold text-primary border-primary/20 hover:bg-primary/5 h-9"
-                  >
-                    Apply All Suggestions
-                  </Button>
-                )}
-
-                <div className="space-y-4">
-                  {suggestions.length > 0 ? (
-                    suggestions.map((sug) => (
-                      <Card key={sug.id} className="rounded-xl border-border p-4 space-y-3">
-                        <div className="flex justify-between items-start">
-                          <span className="font-bold text-[10px] uppercase tracking-wider text-muted-foreground bg-secondary px-2 py-0.5 rounded">
-                            {sug.category} Improvement
-                          </span>
-                        </div>
-                        <p className="text-xs text-left text-slate-700 leading-relaxed font-semibold italic">"{sug.reason}"</p>
-                        
-                        <div className="grid grid-cols-1 gap-2 text-xs pt-1 text-left">
-                          <div className="p-2 bg-red-50/50 rounded border border-red-100">
-                            <span className="font-bold text-red-700 block mb-0.5">Current:</span>
-                            <span className="line-through block truncate">{sug.currentText}</span>
-                          </div>
-                          <div className="p-2 bg-emerald-50/50 rounded border border-emerald-100">
-                            <span className="font-bold text-emerald-700 block mb-0.5">Suggested:</span>
-                            <span className="block truncate">{sug.suggestedText}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2 justify-end pt-1">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="text-xs h-8"
-                            onClick={() => setSuggestions(prev => prev.filter(s => s.id !== sug.id))}
-                          >
-                            Ignore
-                          </Button>
-                          <Button 
-                            variant="default" 
-                            size="sm" 
-                            className="text-xs h-8 text-white"
-                            onClick={() => handleApplySuggestion(sug)}
-                          >
-                            Apply
-                          </Button>
-                        </div>
-                      </Card>
-                    ))
-                  ) : (
-                    <div className="py-12 text-center text-muted-foreground">
-                      <HelpCircle className="h-12 w-12 text-muted-foreground mx-auto mb-2 opacity-50" />
-                      <p className="text-sm font-semibold">No suggestions currently loaded.</p>
-                      <p className="text-xs mt-1">Click the Scan button above to analyze your resume contents.</p>
-                    </div>
-                  )}
-                </div>
+              <TabsContent value="suggestions" className="mt-0 h-full">
+                <SuggestionsDashboard 
+                  suggestions={suggestions}
+                  scores={scores}
+                  isAnalyzing={isAnalyzingSuggestions}
+                  onApply={handleApplySuggestion}
+                  onUndo={handleUndoSuggestion}
+                  onDismiss={handleDismissSuggestion}
+                  canUndo={(id) => undoStack[id] !== undefined}
+                />
               </TabsContent>
             </div>
           </Tabs>
@@ -1401,7 +1401,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
             {/* Wrapper reserves the scaled dimensions to prevent clipping */}
             <div style={{ width: '520px', height: 'max-content' }}>
               <div className="shadow-2xl border border-border/50 bg-white" style={{ width: '800px', transform: 'scale(0.65)', transformOrigin: 'top left' }}>
-                <ResumePreview resume={resume} />
+                <ResumePreview resume={deferredResume} />
               </div>
             </div>
           </div>
@@ -1411,7 +1411,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
       {/* Hidden Resume Preview for Export Generation */}
       <div className="absolute top-0 left-0 w-0 h-0 overflow-hidden pointer-events-none opacity-0 -z-50">
         <div id="resume-export-preview-hidden">
-          <ResumePreview resume={resume} />
+          <ResumePreview resume={deferredResume} />
         </div>
       </div>
     </div>

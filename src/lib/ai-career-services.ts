@@ -190,63 +190,66 @@ export class ATSService {
 // ---------------------------------------------------------------------------
 // 3. AI Suggestions Service
 // ---------------------------------------------------------------------------
+import { LocalHeuristicAnalyzer } from './local-heuristic-analyzer';
+
 export class ResumeSuggestionService {
-  static async generateSuggestions(resume: Resume): Promise<ResumeSuggestion[]> {
+  static async generateSuggestions(resume: Resume, jobDescription?: string): Promise<{ scores: any, suggestions: ResumeSuggestion[] }> {
     await trackAiUsage();
 
-    if (shouldUseMock()) {
-      await new Promise(r => setTimeout(r, 1500));
-      return [
-        {
-          id: 'sug_1',
-          category: 'Metrics',
-          targetField: 'summary',
-          currentText: resume.summary,
-          suggestedText: `Results-oriented specialist with over ${resume.experience?.length || 2} years of history driving high-value feature design. Developed core products reducing page render latency by 30%.`,
-          reason: 'Including clear business metrics at the top grabs recruiter attention immediately.'
-        },
-        {
-          id: 'sug_2',
-          category: 'Action Verbs',
-          targetField: 'experience[0].description',
-          currentText: resume.experience?.[0]?.description || 'Worked on projects',
-          suggestedText: '• Spearheaded critical UI redesign, leading to 25% user retention increase.\n• Orchestrated API caching, decreasing server load.',
-          reason: 'Replaces passive language with active keywords to maximize ATS indexing potential.'
-        }
-      ];
+    if (shouldUseMock() || !openai) {
+      await new Promise(r => setTimeout(r, 600)); // debounce simulation
+      return LocalHeuristicAnalyzer.analyze(resume);
     }
 
     const resumeText = JSON.stringify(resume);
-    const response = await openai!.chat.completions.create({
-      model: 'gpt-4o-mini',
-      response_format: { type: 'json_object' },
-      messages: [
+    const systemPrompt = `You are an expert AI Writing Assistant panel. Analyze the resume and output JSON suggestions for improvement.
+    ${jobDescription ? `Compare against this job description: ${jobDescription}` : ''}
+    Schema:
+    {
+      "scores": {
+        "overall": number (0-100),
+        "ats": number,
+        "writing": number,
+        "content": number,
+        "keyword": number,
+        "experience": number
+      },
+      "suggestions": [
         {
-          role: 'system',
-          content: `You are an expert AI Writing Assistant panel. Analyze the resume and output JSON suggestions for improvement. Schema:
-          {
-            "suggestions": [
-              {
-                "id": "string",
-                "category": "Grammar"|"Tone"|"Action Verbs"|"Metrics"|"Skills"|"Summary"|"Title"|"ATS",
-                "targetField": "string (e.g. summary or experience[0].description)",
-                "currentText": "string",
-                "suggestedText": "string",
-                "reason": "string"
-              }
-            ]
-          }`
-        },
-        {
-          role: 'user',
-          content: `Resume JSON:\n${resumeText}`
+          "id": "string",
+          "title": "string",
+          "description": "string",
+          "reason": "string",
+          "priority": "Critical"|"High"|"Medium"|"Low",
+          "category": "Content"|"ATS"|"Grammar"|"Formatting",
+          "impact": "High"|"Medium"|"Low",
+          "targetField": "string (e.g. summary or experience[0].description)",
+          "currentText": "string",
+          "suggestedText": "string"
         }
-      ],
-      temperature: 0.4
-    });
+      ]
+    }`;
 
-    const parsed = JSON.parse(response.choices[0].message.content || '{}');
-    return parsed.suggestions || [];
+    try {
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Resume JSON:\n${resumeText}` }
+        ],
+        temperature: 0.4
+      });
+
+      const parsed = JSON.parse(response.choices[0].message.content || '{}');
+      return {
+        scores: parsed.scores || LocalHeuristicAnalyzer.analyze(resume).scores,
+        suggestions: parsed.suggestions || []
+      };
+    } catch (e) {
+      console.error("OpenAI failed, falling back to local heuristic:", e);
+      return LocalHeuristicAnalyzer.analyze(resume);
+    }
   }
 }
 
@@ -320,5 +323,121 @@ ${name}`;
     });
 
     return response.choices[0].message.content || content;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 5. Resume Builder Service
+// ---------------------------------------------------------------------------
+export class ResumeBuilderService {
+  static async generateResume(prompt: string): Promise<Partial<Resume>> {
+    await trackAiUsage();
+    
+    if (shouldUseMock()) {
+      await new Promise(r => setTimeout(r, 2000));
+      return {
+        title: "AI Generated Resume",
+        targetRole: prompt.substring(0, 30) + (prompt.length > 30 ? "..." : ""),
+        summary: `This is an AI generated summary based on the prompt: "${prompt}". You can edit this text to better match your actual experience.`,
+        personalInfo: {
+          firstName: "Alex",
+          lastName: "Morgan",
+          email: "alex.morgan@example.com",
+          phone: "(555) 123-4567",
+          location: "San Francisco, CA",
+        },
+        experience: [
+          {
+            id: 'mock-exp-1',
+            title: "Senior Software Engineer",
+            company: "Tech Solutions Inc.",
+            location: "San Francisco, CA",
+            startDate: "2020-01",
+            endDate: "Present",
+            current: true,
+            description: "- Led development of core microservices using Node.js and React\n- Improved system performance by 40% through database optimization\n- Mentored junior engineers and conducted code reviews"
+          }
+        ],
+        education: [
+          {
+            id: 'mock-edu-1',
+            school: "University of Technology",
+            degree: "Bachelor of Science",
+            field: "Computer Science",
+            location: "San Jose, CA",
+            startDate: "2015-08",
+            endDate: "2019-05",
+            current: false,
+            description: "Graduated with Honors. Specialized in AI and Machine Learning."
+          }
+        ],
+        skills: [
+          { id: 'mock-skill-1', name: "JavaScript", level: "Expert", category: "Languages" },
+          { id: 'mock-skill-2', name: "React", level: "Expert", category: "Frameworks" },
+          { id: 'mock-skill-3', name: "Node.js", level: "Advanced", category: "Backend" },
+        ]
+      };
+    }
+
+    const response = await openai!.chat.completions.create({
+      model: 'gpt-4o-mini',
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert resume writer. Generate a highly professional, fully-fleshed out resume in JSON format based on the user's prompt. 
+          Use standard resume structure. Create realistic sounding companies and bullet points if they are not provided, tailored to the requested role.
+          
+          Return ONLY JSON matching this EXACT structure (excluding id, theme, lastModified which are handled by the client):
+          {
+            "title": "Resume Title",
+            "targetRole": "The target job title",
+            "summary": "A professional 3-4 sentence summary",
+            "personalInfo": { "firstName": "John", "lastName": "Doe", "email": "email@example.com", "phone": "555-555-5555", "location": "City, State" },
+            "experience": [
+              {
+                "id": "gen-exp-1",
+                "title": "Job Title",
+                "company": "Company Name",
+                "location": "City, State",
+                "startDate": "YYYY-MM",
+                "endDate": "YYYY-MM or Present",
+                "current": boolean,
+                "description": "- Bullet point 1\\n- Bullet point 2\\n- Bullet point 3"
+              }
+            ],
+            "education": [
+              {
+                "id": "gen-edu-1",
+                "school": "School Name",
+                "degree": "Degree (e.g. BS)",
+                "field": "Field of Study",
+                "location": "City, State",
+                "startDate": "YYYY-MM",
+                "endDate": "YYYY-MM",
+                "current": boolean,
+                "description": "Any honors or details"
+              }
+            ],
+            "skills": [
+              {
+                "id": "gen-skill-1",
+                "name": "Skill Name",
+                "level": "Expert/Advanced/Intermediate/Beginner",
+                "category": "Optional Category"
+              }
+            ]
+          }`
+        },
+        {
+          role: 'user',
+          content: `Generate a resume based on this description:\n\n${prompt}`
+        }
+      ],
+      temperature: 0.7
+    });
+
+    const parsed = JSON.parse(response.choices[0].message.content || '{}');
+    return parsed as Partial<Resume>;
   }
 }

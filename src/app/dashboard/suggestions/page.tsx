@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 
-export default function SuggestionsRedirectPage() {
-  redirect('/dashboard/builder');
+export default function Page() {
+  notFound();
 }

@@ -21,6 +21,7 @@ export interface Resume {
   templateId: string;
   theme?: ThemeConfig;
   lastModified: string;
+  expiresAt?: string;
   isDraft?: boolean;
   personalInfo: PersonalInfo;
   summary: string;
@@ -145,13 +146,26 @@ export interface AtsSuggestion {
   section: string;
 }
 
+export interface ResumeScores {
+  overall: number;
+  ats: number;
+  writing: number;
+  content: number;
+  keyword: number;
+  experience: number;
+}
+
 export interface ResumeSuggestion {
   id: string;
-  category: 'Grammar' | 'Tone' | 'Action Verbs' | 'Metrics' | 'Skills' | 'Summary' | 'Title' | 'ATS';
+  title: string;
+  description: string;
+  reason: string;
+  priority: 'Critical' | 'High' | 'Medium' | 'Low';
+  category: 'Content' | 'ATS' | 'Grammar' | 'Formatting' | string;
+  impact: 'High' | 'Medium' | 'Low';
   targetField: string; // e.g. "summary", "experience[0].description"
   currentText: string;
   suggestedText: string;
-  reason: string;
 }
 
 export interface CoverLetter {

@@ -9,15 +9,12 @@ import {
   PenTool, 
   Target, 
   CheckCircle, 
-  Sparkles, 
   FileSignature, 
   Network, 
   LayoutTemplate, 
-  Download, 
   Settings,
   LogOut,
   X,
-  UploadCloud,
   PanelLeftClose,
   PanelLeftOpen
 } from 'lucide-react';
@@ -29,14 +26,11 @@ const navigation = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
   { name: 'My Resumes', href: '/dashboard/resumes', icon: FileText },
   { name: 'Resume Builder', href: '/dashboard/builder', icon: PenTool },
-  { name: 'Upload Resume', href: '/dashboard/upload', icon: UploadCloud },
   { name: 'Job Matcher', href: '/dashboard/matcher', icon: Target },
   { name: 'ATS Reports', href: '/dashboard/ats', icon: CheckCircle },
-  { name: 'AI Suggestions', href: '/dashboard/suggestions', icon: Sparkles },
   { name: 'Cover Letters', href: '/dashboard/cover-letters', icon: FileSignature },
   { name: 'LinkedIn Optimizer', href: '/dashboard/linkedin', icon: Network },
   { name: 'Templates', href: '/dashboard/templates', icon: LayoutTemplate },
-  { name: 'Exports', href: '/dashboard/export', icon: Download },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 

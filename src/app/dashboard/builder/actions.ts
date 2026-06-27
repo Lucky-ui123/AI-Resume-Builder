@@ -35,7 +35,8 @@ export async function createResumeAction(title: string, targetRole: string) {
     projects: [],
     certifications: [],
     languages: [],
-    awards: []
+    awards: [],
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
   };
   
   const result = await saveResume(emptyResume as Resume);

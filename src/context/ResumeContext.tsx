@@ -53,11 +53,22 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
         }
       }
       
-      const { lsGetAllResumes } = await import('@/lib/local-storage-service');
+      const { lsGetAllResumes, lsDeleteResume } = await import('@/lib/local-storage-service');
       const localResumes = lsGetAllResumes();
       
+      const now = new Date();
+      
+      // Cleanup expired local resumes silently
+      const validLocalResumes = localResumes.filter(r => {
+        if (r.expiresAt && new Date(r.expiresAt) < now) {
+          lsDeleteResume(r.id);
+          return false;
+        }
+        return true;
+      });
+      
       const existingIds = new Set(serverResumes.map(r => r.id));
-      const filteredLocal = localResumes.filter(r => !existingIds.has(r.id));
+      const filteredLocal = validLocalResumes.filter(r => !existingIds.has(r.id));
       
       const merged = [...serverResumes, ...filteredLocal].sort((a, b) => 
         new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
@@ -192,8 +203,9 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
       projects: [],
       certifications: [],
       languages: [],
-      awards: []
-    };
+      awards: [],
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    } as any;
 
     if (isSupabase()) {
       const res = await createResumeAction(title, targetRole);

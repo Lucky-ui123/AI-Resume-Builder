@@ -1,4 +1,4 @@
-import { saveAs } from 'file-saver';
+
 
 /**
  * Extracts the active CSS text from the document.
@@ -12,39 +12,74 @@ const getGlobalCSS = () => {
           cssText += rule.cssText + '\n';
         }
       } catch (e) {
-        console.warn('Could not read cssRules from a stylesheet (likely CORS issue)', e);
+        // Ignore CORS errors for external stylesheets
       }
     }
   } catch (e) {
-    console.warn('Error reading stylesheets', e);
+    // Ignore stylesheet reading errors
   }
   return cssText;
 };
 
 /**
  * PDF Generator
- * Uses a Playwright Server-Side API route to generate a true, high-resolution vector PDF with embedded fonts.
+ * Creates a hidden iframe, injects the resume HTML and styles, and triggers native print.
+ * This guarantees offline support and avoids 50MB Vercel serverless limits.
  */
 export const generatePDF = async (elementId: string, filename: string) => {
   const element = document.getElementById(elementId);
   if (!element) throw new Error('Could not find the resume preview element.');
 
   const cssText = getGlobalCSS();
-  
-  const clone = element.cloneNode(true) as HTMLElement;
-  const htmlContent = clone.innerHTML;
+  const htmlContent = element.innerHTML;
 
-  const response = await fetch('/api/export/pdf', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ html: htmlContent, css: cssText }),
-  });
+  // Create an invisible iframe
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  document.body.appendChild(iframe);
 
-  if (!response.ok) {
-    throw new Error('Failed to generate PDF');
+  const iframeDoc = iframe.contentWindow?.document;
+  if (!iframeDoc) {
+    document.body.removeChild(iframe);
+    throw new Error('Failed to create print frame');
   }
 
-  const blob = await response.blob();
-  saveAs(blob, filename);
+  // Inject content and styles
+  iframeDoc.open();
+  iframeDoc.write(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <title>${filename}</title>
+      <style>
+        ${cssText}
+        @page { size: A4 portrait; margin: 0; }
+        body { margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; }
+        .resume-container { width: 100% !important; box-shadow: none !important; }
+      </style>
+    </head>
+    <body>
+      <div class="resume-container">
+        ${htmlContent}
+      </div>
+    </body>
+    </html>
+  `);
+  iframeDoc.close();
+
+  // Wait for images and fonts to load, then print
+  setTimeout(() => {
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+    // Cleanup after print dialog closes
+    setTimeout(() => {
+      document.body.removeChild(iframe);
+    }, 1000);
+  }, 500);
 };
 

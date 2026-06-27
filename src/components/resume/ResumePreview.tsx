@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, memo } from 'react';
 import { Resume } from '@/types';
 
 export type LayoutType = 'classic-ats' | 'modern-professional' | 'product-designer';
@@ -7,7 +7,7 @@ interface ResumePreviewProps {
   resume: Resume;
 }
 
-export const ResumePreview = forwardRef<HTMLDivElement, ResumePreviewProps>(
+export const ResumePreview = memo(forwardRef<HTMLDivElement, ResumePreviewProps>(
   ({ resume }, ref) => {
     // Dynamic styling based on theme
     const themeStyle = {
@@ -33,7 +33,7 @@ export const ResumePreview = forwardRef<HTMLDivElement, ResumePreviewProps>(
       </div>
     );
   }
-);
+));
 ResumePreview.displayName = 'ResumePreview';
 
 // --- Shared Components ---
