@@ -49,12 +49,10 @@ export class LocalHeuristicAnalyzer {
         suggestedText: 'Experienced professional with a track record of delivering measurable impact. Skilled in [Your Key Skill] and [Your Key Skill] with a focus on [Your Industry/Focus].'
       });
     } else {
-      let summaryIssues = false;
       const lowerSummary = resume.summary.toLowerCase();
       
       BUZZWORDS.forEach(word => {
         if (lowerSummary.includes(word)) {
-          summaryIssues = true;
           writingDeductions += 5;
           suggestions.push({
             id: generateId('sug_summary_buzz'),

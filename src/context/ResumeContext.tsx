@@ -41,53 +41,64 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
     return !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   }, []);
 
+  const fetchResumesData = useCallback(async () => {
+    let serverResumes: Resume[] = [];
+    if (isSupabase()) {
+      const response = await fetch('/api/resumes-api'); // Fallback or fetch from a client endpoint if needed
+      if (response.ok) {
+        const data = await response.json();
+        serverResumes = data.resumes || [];
+      }
+    }
+    
+    const { lsGetAllResumes, lsDeleteResume } = await import('@/lib/local-storage-service');
+    const localResumes = lsGetAllResumes();
+    
+    const now = new Date();
+    const validLocalResumes = localResumes.filter(r => {
+      if (r.expiresAt && new Date(r.expiresAt) < now) {
+        lsDeleteResume(r.id);
+        return false;
+      }
+      return true;
+    });
+    
+    const existingIds = new Set(serverResumes.map(r => r.id));
+    const filteredLocal = validLocalResumes.filter(r => !existingIds.has(r.id));
+    
+    return [...serverResumes, ...filteredLocal].sort((a, b) => 
+      new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
+    );
+  }, [isSupabase]);
+
   const refreshResumes = useCallback(async () => {
     setIsLoading(true);
     try {
-      let serverResumes: Resume[] = [];
-      if (isSupabase()) {
-        const response = await fetch('/api/resumes-api'); // Fallback or fetch from a client endpoint if needed
-        if (response.ok) {
-          const data = await response.json();
-          serverResumes = data.resumes || [];
-        }
-      }
-      
-      const { lsGetAllResumes, lsDeleteResume } = await import('@/lib/local-storage-service');
-      const localResumes = lsGetAllResumes();
-      
-      const now = new Date();
-      
-      // Cleanup expired local resumes silently
-      const validLocalResumes = localResumes.filter(r => {
-        if (r.expiresAt && new Date(r.expiresAt) < now) {
-          lsDeleteResume(r.id);
-          return false;
-        }
-        return true;
-      });
-      
-      const existingIds = new Set(serverResumes.map(r => r.id));
-      const filteredLocal = validLocalResumes.filter(r => !existingIds.has(r.id));
-      
-      const merged = [...serverResumes, ...filteredLocal].sort((a, b) => 
-        new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
-      );
-      
+      const merged = await fetchResumesData();
       setResumes(merged);
     } catch (e) {
       console.error('Failed to load resumes:', e);
     } finally {
       setIsLoading(false);
     }
-  }, [isSupabase]);
+  }, [fetchResumesData]);
 
   // Load initially
   useEffect(() => {
-    // If supabase is configured, we can also query a client-side endpoint
-    // Let's implement /api/resumes-api or we can fetch directly from db-service client context
-    refreshResumes();
-  }, [refreshResumes]);
+    let ignore = false;
+    fetchResumesData().then(merged => {
+      if (!ignore) {
+        setResumes(merged);
+        setIsLoading(false);
+      }
+    }).catch(e => {
+      if (!ignore) {
+        console.error('Failed to load resumes:', e);
+        setIsLoading(false);
+      }
+    });
+    return () => { ignore = true; };
+  }, [fetchResumesData]);
 
   const saveResume = async (resume: Resume) => {
     let id = '';
@@ -205,7 +216,7 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
       languages: [],
       awards: [],
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-    } as any;
+    } as unknown as Resume;
 
     if (isSupabase()) {
       const res = await createResumeAction(title, targetRole);

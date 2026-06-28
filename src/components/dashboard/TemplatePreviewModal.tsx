@@ -25,14 +25,15 @@ export function TemplatePreviewModal({ isOpen, onClose, templateId, onApply, cus
       const vh = window.innerHeight;
       const vw = window.innerWidth;
 
-      // On mobile, scale down significantly
+      let newScale = 0.85;
       if (vw < 768) {
-        setScale(0.4);
+        newScale = 0.4;
       } else if (vh < 900) {
-        setScale(0.65);
-      } else {
-        setScale(0.85);
+        newScale = 0.65;
       }
+      
+      const timer = setTimeout(() => setScale(newScale), 0);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 

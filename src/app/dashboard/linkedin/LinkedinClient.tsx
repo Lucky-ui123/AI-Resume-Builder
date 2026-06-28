@@ -27,6 +27,7 @@ export default function LinkedinClient({ initialId }: { initialId?: string }) {
   });
 
   const handleGenerate = async () => {
+    if (!resume) return;
     setIsGenerating(true);
     setError(null);
     try {

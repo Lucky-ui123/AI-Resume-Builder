@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 
 export async function GET(request: Request) {
   // Check authorization (e.g. cron secret if you configure one in Vercel)
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: 'Supabase not configured' }, { status: 200 });
   }
 
-  const supabase = supabaseServer();
+  const supabase = await createClient();
   const now = new Date().toISOString();
 
   try {
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ 
       success: true, 
       message: 'Cleanup successful', 
-      deletedCount: data?.length || 0 
+      deletedCount: Array.isArray(data) ? (data as unknown[]).length : 0 
     }, { status: 200 });
   } catch (err) {
     console.error('Unexpected error during cleanup:', err);

@@ -5,11 +5,10 @@ import { Button } from '@/components/ui/button';
 import { FileText, Menu } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetHeader } from '@/components/ui/sheet';
-import { usePathname } from 'next/navigation';
+
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
-  const pathname = usePathname();
 
   useEffect(() => {
     const handleScroll = () => {

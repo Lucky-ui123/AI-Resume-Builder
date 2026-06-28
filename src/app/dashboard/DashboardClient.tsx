@@ -15,7 +15,7 @@ import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle
 } from '@/components/ui/sheet';
 import { 
-  FileText, Target, TrendingUp, Briefcase, Plus, Clock, History, Loader2
+  FileText, Target, TrendingUp, Briefcase, Clock, History, Loader2
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';

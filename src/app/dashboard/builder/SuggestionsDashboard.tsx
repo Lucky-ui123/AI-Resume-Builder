@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState } from 'react';
-import { ResumeSuggestion, ResumeScores, Resume } from '@/types';
+import { ResumeSuggestion, ResumeScores } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Check, X, AlertCircle, TrendingUp, Sparkles, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Check, X, Sparkles, AlertTriangle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
 interface SuggestionsDashboardProps {

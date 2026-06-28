@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useResumes } from '@/context/ResumeContext';
-import { Resume, MatchReport } from '@/types';
+import { MatchReport } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { 
-  Target, FileText, Upload, Sparkles, Check, AlertCircle, 
-  ArrowRight, Download, Brain, FileCheck, HelpCircle, Loader2 
+  Target, Upload, Sparkles, 
+  Download, Brain, FileCheck, Loader2 
 } from 'lucide-react';
 import { saveMatchReportAction, analyzeMatchAction } from '../career-actions';
 import { lsSaveMatchReport } from '@/lib/local-storage-service';
@@ -18,20 +18,15 @@ import Link from 'next/link';
 
 export default function MatcherClient() {
   const { resumes, isLoading: resumesLoading } = useResumes();
-  const [selectedResumeId, setSelectedResumeId] = useState('');
+  const [selectedResumeIdState, setSelectedResumeId] = useState('');
+  const selectedResumeId = selectedResumeIdState || (resumes.length > 0 ? resumes[0].id : '');
   const [jobDescription, setJobDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [report, setReport] = useState<MatchReport | null>(null);
   const [reportsList, setReportsList] = useState<MatchReport[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const reportPrintRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (resumes.length > 0 && !selectedResumeId) {
-      setSelectedResumeId(resumes[0].id);
-    }
-  }, [resumes, selectedResumeId]);
 
   // Load saved match reports on mount
   useEffect(() => {
@@ -73,9 +68,10 @@ export default function MatcherClient() {
 
       setJobDescription(data.text || '');
       showSuccess(`Loaded job description from ${file.name}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      showError(`Failed to parse file: ${err.message || 'Error occurred'}`);
+      const errorMessage = err instanceof Error ? err.message : 'Error occurred';
+      showError(`Failed to parse file: ${errorMessage}`);
     } finally {
       dismissToast(toastId);
     }
@@ -118,15 +114,17 @@ export default function MatcherClient() {
     setIsSaving(true);
     const toastId = showLoading('Saving report...');
     try {
+      let updatedReport = report;
       if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
         const res = await saveMatchReportAction(report);
         if (res.error) throw new Error(res.error);
-        report.id = res.id;
+        if (res.id) updatedReport = { ...report, id: res.id };
       } else {
         const saved = lsSaveMatchReport(report);
-        report.id = saved.id;
+        updatedReport = { ...report, id: saved.id };
       }
-      setReportsList(prev => [report, ...prev]);
+      setReport(updatedReport);
+      setReportsList(prev => [updatedReport, ...prev]);
       showSuccess('Report saved successfully!');
     } catch (err) {
       console.error(err);

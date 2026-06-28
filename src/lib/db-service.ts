@@ -1,6 +1,6 @@
 import { createClient, createAdminClient } from './supabase/server';
 import { mockSubscription } from './mock-data';
-import { Resume, MatchReport, AtsReport, CoverLetter, ResumeSuggestion } from '@/types';
+import { Resume, MatchReport, AtsReport, CoverLetter, ResumeSuggestion, AtsSuggestion } from '@/types';
 import { SUBSCRIPTION_PLANS, PlanType } from './subscription-config';
 
 // Helper to check if Supabase is configured
@@ -259,8 +259,10 @@ export async function saveResume(resume: Resume): Promise<{ id: string; error: s
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { id, userId: _userId, title, targetRole, templateId, lastModified: _lastModified, ...content } = resume;
+  const { id, userId, title, targetRole, templateId, lastModified, ...content } = resume;
+  void id;
+  void userId;
+  void lastModified;
 
   const dbResume = {
     user_id: user.id,
@@ -451,29 +453,39 @@ export async function saveMatchReport(report: MatchReport) {
   return { id: data?.id || '', error: error ? error.message : null };
 }
 
-export async function getMatchReports() {
+export async function getMatchReports(): Promise<MatchReport[]> {
   if (!isSupabaseConfigured()) return [];
   const supabase = await createClient();
   const { data, error } = await supabase.from('match_reports').select('*').order('created_at', { ascending: false });
   if (error || !data) return [];
   
-  return data.map((r: Record<string, unknown>) => ({
-    id: r.id,
-    resumeId: r.resume_id,
-    resumeTitle: r.resume_title,
-    jobTitle: r.job_title,
-    companyName: r.company_name,
-    jobDescription: r.job_description,
-    matchScore: r.match_score,
-    skillsMatch: r.skills_match,
-    keywords: r.keywords,
-    experienceMatch: r.experience_match,
-    educationMatch: r.education_match,
-    strengths: r.strengths,
-    weaknesses: r.weaknesses,
-    recommendations: r.recommendations,
-    created_at: r.created_at
-  }));
+  return data.map((r: Record<string, unknown>) => {
+    const skillsMatch = r.skills_match as { matched?: unknown; missing?: unknown } | null;
+    const keywords = r.keywords as { matched?: unknown; missing?: unknown } | null;
+    return {
+      id: String(r.id || ''),
+      resumeId: String(r.resume_id || ''),
+      resumeTitle: String(r.resume_title || ''),
+      jobTitle: String(r.job_title || ''),
+      companyName: String(r.company_name || ''),
+      jobDescription: String(r.job_description || ''),
+      matchScore: Number(r.match_score || 0),
+      skillsMatch: {
+        matched: Array.isArray(skillsMatch?.matched) ? (skillsMatch.matched as unknown[]).map(String) : [],
+        missing: Array.isArray(skillsMatch?.missing) ? (skillsMatch.missing as unknown[]).map(String) : []
+      },
+      keywords: {
+        matched: Array.isArray(keywords?.matched) ? (keywords.matched as unknown[]).map(String) : [],
+        missing: Array.isArray(keywords?.missing) ? (keywords.missing as unknown[]).map(String) : []
+      },
+      experienceMatch: String(r.experience_match || ''),
+      educationMatch: String(r.education_match || ''),
+      strengths: Array.isArray(r.strengths) ? r.strengths.map(String) : [],
+      weaknesses: Array.isArray(r.weaknesses) ? r.weaknesses.map(String) : [],
+      recommendations: Array.isArray(r.recommendations) ? r.recommendations.map(String) : [],
+      created_at: String(r.created_at || '')
+    };
+  });
 }
 
 export async function deleteMatchReport(id: string) {
@@ -511,26 +523,36 @@ export async function saveAtsReport(report: AtsReport) {
   return { id: data?.id || '', error: error ? error.message : null };
 }
 
-export async function getAtsReports() {
+export async function getAtsReports(): Promise<AtsReport[]> {
   if (!isSupabaseConfigured()) return [];
   const supabase = await createClient();
   const { data, error } = await supabase.from('ats_reports').select('*').order('created_at', { ascending: false });
   if (error || !data) return [];
   
   return data.map((r: Record<string, unknown>) => ({
-    id: r.id,
-    resumeId: r.resume_id,
-    resumeTitle: r.resume_title,
-    overallScore: r.overall_score,
-    contactInfoScore: r.contact_info_score,
-    structureScore: r.structure_score,
-    keywordScore: r.keyword_score,
-    readabilityScore: r.readability_score,
-    formattingScore: r.formatting_score,
-    completenessScore: r.completeness_score,
-    missingKeywords: r.missing_keywords,
-    suggestions: r.suggestions,
-    created_at: r.created_at
+    id: String(r.id),
+    resumeId: String(r.resume_id),
+    resumeTitle: String(r.resume_title),
+    overallScore: Number(r.overall_score),
+    contactInfoScore: Number(r.contact_info_score),
+    structureScore: Number(r.structure_score),
+    keywordScore: Number(r.keyword_score),
+    readabilityScore: Number(r.readability_score),
+    formattingScore: Number(r.formatting_score),
+    completenessScore: Number(r.completeness_score),
+    missingKeywords: Array.isArray(r.missing_keywords) ? r.missing_keywords.map(String) : [],
+    suggestions: Array.isArray(r.suggestions)
+      ? r.suggestions.map((s: unknown): AtsSuggestion => {
+          const item = s as Record<string, unknown> | null;
+          return {
+            id: String(item?.id || ''),
+            priority: String(item?.priority || 'Medium') as 'High' | 'Medium' | 'Low',
+            message: String(item?.message || ''),
+            section: String(item?.section || '')
+          };
+        })
+      : [],
+    created_at: String(r.created_at)
   }));
 }
 
@@ -575,24 +597,24 @@ export async function saveCoverLetter(letter: CoverLetter) {
   return { id: data?.id || '', error: error ? error.message : null };
 }
 
-export async function getCoverLetters() {
+export async function getCoverLetters(): Promise<CoverLetter[]> {
   if (!isSupabaseConfigured()) return [];
   const supabase = await createClient();
   const { data, error } = await supabase.from('cover_letters').select('*').order('updated_at', { ascending: false });
   if (error || !data) return [];
   
   return data.map((l: Record<string, unknown>) => ({
-    id: l.id,
-    title: l.title,
-    resumeId: l.resume_id,
-    jobTitle: l.job_title,
-    companyName: l.company_name,
-    jobDescription: l.job_description,
-    hiringManager: l.hiring_manager,
-    tone: l.tone,
-    length: l.length,
-    content: l.content,
-    lastModified: l.updated_at
+    id: String(l.id || ''),
+    title: String(l.title || ''),
+    resumeId: String(l.resume_id || ''),
+    jobTitle: String(l.job_title || ''),
+    companyName: String(l.company_name || ''),
+    jobDescription: String(l.job_description || ''),
+    hiringManager: l.hiring_manager ? String(l.hiring_manager) : undefined,
+    tone: String(l.tone || 'Professional'),
+    length: String(l.length || 'Medium'),
+    content: String(l.content || ''),
+    lastModified: String(l.updated_at || l.created_at || '')
   }));
 }
 

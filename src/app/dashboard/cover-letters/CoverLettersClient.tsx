@@ -1,22 +1,21 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useResumes } from '@/context/ResumeContext';
-import { Resume, CoverLetter } from '@/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { CoverLetter } from '@/types';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { 
   FileSignature, Loader2, Sparkles, Download, Save, Copy, 
-  Trash2, FileEdit, Plus, Wand2, Minimize2, Maximize2 
+  Trash2, Wand2, Minimize2, Maximize2 
 } from 'lucide-react';
 import { 
   saveCoverLetterAction, 
   getCoverLettersAction, 
   deleteCoverLetterAction, 
-  renameCoverLetterAction, 
   duplicateCoverLetterAction,
   generateCoverLetterAiAction,
   rewriteCoverLetterAiAction
@@ -25,14 +24,14 @@ import {
   lsSaveCoverLetter, 
   lsGetCoverLetters, 
   lsDeleteCoverLetter, 
-  lsRenameCoverLetter, 
   lsDuplicateCoverLetter 
 } from '@/lib/local-storage-service';
 import { showSuccess, showError, showLoading, dismissToast } from '@/lib/toast';
 
 export default function CoverLettersClient() {
   const { resumes, isLoading: resumesLoading } = useResumes();
-  const [selectedResumeId, setSelectedResumeId] = useState('');
+  const [selectedResumeIdState, setSelectedResumeId] = useState('');
+  const selectedResumeId = selectedResumeIdState || (resumes.length > 0 ? resumes[0].id : '');
   const [companyName, setCompanyName] = useState('');
   const [jobTitle, setJobTitle] = useState('');
   const [jobDescription, setJobDescription] = useState('');
@@ -48,12 +47,6 @@ export default function CoverLettersClient() {
   const [rewriteInstruction, setRewriteInstruction] = useState('');
   const [isRewriting, setIsRewriting] = useState(false);
 
-  useEffect(() => {
-    if (resumes.length > 0 && !selectedResumeId) {
-      setSelectedResumeId(resumes[0].id);
-    }
-  }, [resumes, selectedResumeId]);
-
   // Load saved letters
   const loadLetters = async () => {
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -65,7 +58,9 @@ export default function CoverLettersClient() {
   };
 
   useEffect(() => {
-    loadLetters();
+    setTimeout(() => {
+      loadLetters();
+    }, 0);
   }, []);
 
   const handleGenerate = async () => {

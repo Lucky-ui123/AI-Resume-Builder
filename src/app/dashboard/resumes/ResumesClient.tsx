@@ -1,21 +1,16 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Resume } from '@/types';
-import { 
-  Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription 
-} from '@/components/ui/card';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { 
-  FileText, MoreVertical, Edit3, Copy, Trash2, Download, 
-  History, Plus, UploadCloud, FileEdit, Clock, Target, Loader2
+  FileText, 
+  History, Plus, UploadCloud, Clock, Loader2
 } from 'lucide-react';
-import { 
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, 
-  DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuGroup 
-} from '@/components/ui/dropdown-menu';
+
 import { 
   Dialog, DialogContent, DialogDescription, DialogFooter, 
   DialogHeader, DialogTitle 
@@ -25,7 +20,7 @@ import {
 } from '@/components/ui/sheet';
 import { useRouter } from 'next/navigation';
 import { 
-  deleteResumeAction, renameResumeAction, duplicateResumeAction, 
+  // deleteResumeAction, renameResumeAction, duplicateResumeAction removed as they are from context
   deleteVersionAction, restoreVersionAction 
 } from './actions';
 import { getResumeVersionsAction, saveResumeVersionAction } from '../builder/actions';

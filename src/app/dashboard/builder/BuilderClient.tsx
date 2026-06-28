@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useDeferredValue } from 'react';
+import { useState, useEffect, useRef, useDeferredValue, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,14 +13,12 @@ import {
   AccordionTrigger 
 } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Sparkles, Save, Eye, LayoutPanelLeft, Check, X, Loader2, History, FileEdit, Trash2, Plus, Palette, LayoutTemplate, WifiOff, AlertCircle, Clock, Download, HelpCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sparkles, Eye, LayoutPanelLeft, Check, X, Loader2, History, FileEdit, Trash2, Plus, Palette, LayoutTemplate, AlertCircle, Download } from 'lucide-react';
 import { emptyResume } from '@/lib/mock-data';
-import { saveResumeAction, saveResumeVersionAction } from './actions';
-import { Resume, Skill, ResumeSuggestion } from '@/types';
+import { saveResumeVersionAction } from './actions';
+import { Resume, Skill, ResumeSuggestion, ThemeConfig } from '@/types';
 import { ResumePreview } from '@/components/resume/ResumePreview';
-import { Card } from '@/components/ui/card';
 import { showSuccess, showError, showLoading, dismissToast } from '@/lib/toast';
 import { templates } from '@/lib/templates';
 import { TemplateMiniPreview } from '@/components/resume/TemplateMiniPreview';
@@ -44,9 +42,13 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
   const [isAnalyzingSuggestions, setIsAnalyzingSuggestions] = useState(false);
   
   const [saveState, setSaveState] = useState<SaveState>('clean');
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsyncedChanges, setHasUnsyncedChanges] = useState(false);
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return navigator.onLine;
+    }
+    return true;
+  });
 
   // AI Generation State
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
@@ -142,7 +144,11 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
   };
   
   const initialLoadDone = useRef(false);
-  const latestState = useRef({ resume, saveState });
+  const latestState = useRef<{
+    resume: Resume;
+    saveState: SaveState;
+    performSave?: (res: Resume) => Promise<{ id: string; error: string | null }>;
+  }>({ resume, saveState });
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // On mount: restore the best available draft from localStorage.
@@ -153,8 +159,6 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
   // - For a Supabase resume that has a newer local draft: show the Restore banner
   //   so the user can choose (conflict resolution).
   useEffect(() => {
-    setIsOnline(navigator.onLine);
-
     if (!initialResume) {
       const idParam = searchParams.get('id');
       
@@ -187,8 +191,10 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
         try {
           const draft = JSON.parse(draftStr);
           if (draft && draft.title) {
-            setResume(draft);
-            setSaveState('editing');
+            setTimeout(() => {
+              setResume(draft);
+              setSaveState('editing');
+            }, 0);
             // Don't remove the draft yet; it will be cleared after the first
             // successful auto-save produces a real ID.
           }
@@ -204,7 +210,9 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
         try {
           const draft = JSON.parse(draftStr);
           if (draft && draft.title) {
-            setHasUnsyncedChanges(true);
+            setTimeout(() => {
+              setHasUnsyncedChanges(true);
+            }, 0);
           }
         } catch (e) {
           console.error('Failed to parse local draft', e);
@@ -213,12 +221,21 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
     }
 
     initialLoadDone.current = true;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, initialResume]);
+  }, [searchParams, initialResume, router]);
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    const handleOnline = () => {
+      setIsOnline(true);
+      if (latestState.current.saveState === 'offline') {
+        setSaveState('editing'); // Trigger a save on reconnect
+      }
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      if (latestState.current.saveState !== 'clean') {
+        setSaveState('offline');
+      }
+    };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     return () => {
@@ -227,17 +244,13 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
     };
   }, []);
 
-  useEffect(() => {
-    if (!isOnline && saveState !== 'clean') {
-      setSaveState('offline');
-    } else if (isOnline && saveState === 'offline') {
-      setSaveState('editing'); // Trigger a save on reconnect
-    }
-  }, [isOnline]);
+  const performSave = useCallback(async (res: Resume) => {
+    return await saveResume(res);
+  }, [saveResume]);
 
   useEffect(() => {
-    latestState.current = { resume, saveState };
-  }, [resume, saveState]);
+    latestState.current = { resume, saveState, performSave };
+  }, [resume, saveState, performSave]);
 
   // Robust Unload Prevention
   useEffect(() => {
@@ -252,19 +265,15 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  const performSave = async (res: Resume) => {
-    return await saveResume(res);
-  };
-
   // Save when component unmounts for Next.js soft navigation
   useEffect(() => {
     return () => {
-      const { resume: r, saveState: s } = latestState.current;
+      const { resume: r, saveState: s, performSave: saveFn } = latestState.current;
       // Only attempt an unmount-save if there are unsaved changes and the
       // resume has a real persisted ID (not an empty/placeholder value).
       const hasRealId = r.id && r.id !== 'new';
-      if ((s === 'editing' || s === 'error' || s === 'offline') && hasRealId) {
-        performSave({ 
+      if ((s === 'editing' || s === 'error' || s === 'offline') && hasRealId && saveFn) {
+        saveFn({ 
           ...r, 
           isDraft: r.isDraft !== false 
         }).catch(console.error);
@@ -287,8 +296,11 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
     }
 
     // Transition to editing state unless we're already mid-save
-    if (saveState === 'clean' || saveState === 'saved') {
-      setSaveState('editing');
+    const currentSaveState = latestState.current.saveState;
+    if (currentSaveState === 'clean' || currentSaveState === 'saved') {
+      setTimeout(() => {
+        setSaveState('editing');
+      }, 0);
     }
 
     // Save locally immediately (offline-first)
@@ -300,7 +312,9 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
     }
 
     if (!isOnline) {
-      setSaveState('offline');
+      setTimeout(() => {
+        setSaveState('offline');
+      }, 0);
       return;
     }
 
@@ -320,7 +334,6 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
             setResume(prev => ({ ...prev, id, isDraft: isDraftStatus }));
             localStorage.removeItem('hirecraft_draft_new');
           }
-          setLastSaved(new Date());
           setSaveState('saved');
           localStorage.removeItem(draftKey);
           setHasUnsyncedChanges(false);
@@ -336,8 +349,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resume, router, isOnline]);
+  }, [resume, router, isOnline, performSave]);
   
 
   const handleSaveVersion = async () => {
@@ -350,7 +362,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
       dismissToast(loadingId);
       showSuccess('Version saved successfully');
       setSaveState('saved');
-    } catch (err) {
+    } catch {
       dismissToast(loadingId);
       setSaveState('error');
       showError("Couldn't save version.");
@@ -1341,8 +1353,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
                         <div 
                           key={color}
                           onClick={() => setResume({ 
-                            ...resume, 
-                            theme: { ...resume.theme, primaryColor: color } as any 
+                            ...resume,                             theme: { ...resume.theme, primaryColor: color } as ThemeConfig 
                           })}
                           className={`w-10 h-10 rounded-full cursor-pointer flex items-center justify-center transition-all ${resume.theme?.primaryColor === color ? 'ring-2 ring-offset-2 ring-primary' : 'hover:scale-110'}`}
                           style={{ backgroundColor: color }}
@@ -1366,8 +1377,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
                         <div 
                           key={font.id}
                           onClick={() => setResume({ 
-                            ...resume, 
-                            theme: { ...resume.theme, fontFamily: font.id } as any 
+                            ...resume,                             theme: { ...resume.theme, fontFamily: font.id } as ThemeConfig 
                           })}
                           className={`cursor-pointer rounded-lg border p-3 flex items-center justify-between ${resume.theme?.fontFamily === font.id ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:border-primary/50'}`}
                           style={{ fontFamily: font.id }}

@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { Resume, MatchReport, AtsReport, CoverLetter, ResumeSuggestion } from '@/types';
+import { Resume, MatchReport, AtsReport, ResumeScores, ResumeSuggestion } from '@/types';
 
 const openai = process.env.OPENAI_API_KEY 
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -193,7 +193,7 @@ export class ATSService {
 import { LocalHeuristicAnalyzer } from './local-heuristic-analyzer';
 
 export class ResumeSuggestionService {
-  static async generateSuggestions(resume: Resume, jobDescription?: string): Promise<{ scores: any, suggestions: ResumeSuggestion[] }> {
+  static async generateSuggestions(resume: Resume, jobDescription?: string): Promise<{ scores: ResumeScores, suggestions: ResumeSuggestion[] }> {
     await trackAiUsage();
 
     if (shouldUseMock() || !openai) {
@@ -349,7 +349,7 @@ export class ResumeBuilderService {
         experience: [
           {
             id: 'mock-exp-1',
-            title: "Senior Software Engineer",
+            role: "Senior Software Engineer",
             company: "Tech Solutions Inc.",
             location: "San Francisco, CA",
             startDate: "2020-01",
@@ -361,20 +361,18 @@ export class ResumeBuilderService {
         education: [
           {
             id: 'mock-edu-1',
-            school: "University of Technology",
+            institution: "University of Technology",
             degree: "Bachelor of Science",
-            field: "Computer Science",
-            location: "San Jose, CA",
+            fieldOfStudy: "Computer Science",
             startDate: "2015-08",
             endDate: "2019-05",
-            current: false,
-            description: "Graduated with Honors. Specialized in AI and Machine Learning."
+            current: false
           }
         ],
         skills: [
-          { id: 'mock-skill-1', name: "JavaScript", level: "Expert", category: "Languages" },
-          { id: 'mock-skill-2', name: "React", level: "Expert", category: "Frameworks" },
-          { id: 'mock-skill-3', name: "Node.js", level: "Advanced", category: "Backend" },
+          { id: 'mock-skill-1', name: "JavaScript", category: "Languages" },
+          { id: 'mock-skill-2', name: "React", category: "Hard" },
+          { id: 'mock-skill-3', name: "Node.js", category: "Hard" },
         ]
       };
     }
@@ -397,7 +395,7 @@ export class ResumeBuilderService {
             "experience": [
               {
                 "id": "gen-exp-1",
-                "title": "Job Title",
+                "role": "Job Title",
                 "company": "Company Name",
                 "location": "City, State",
                 "startDate": "YYYY-MM",
@@ -409,22 +407,19 @@ export class ResumeBuilderService {
             "education": [
               {
                 "id": "gen-edu-1",
-                "school": "School Name",
+                "institution": "School Name",
                 "degree": "Degree (e.g. BS)",
-                "field": "Field of Study",
-                "location": "City, State",
+                "fieldOfStudy": "Field of Study",
                 "startDate": "YYYY-MM",
                 "endDate": "YYYY-MM",
-                "current": boolean,
-                "description": "Any honors or details"
+                "current": boolean
               }
             ],
             "skills": [
               {
                 "id": "gen-skill-1",
                 "name": "Skill Name",
-                "level": "Expert/Advanced/Intermediate/Beginner",
-                "category": "Optional Category"
+                "category": "Hard"
               }
             ]
           }`

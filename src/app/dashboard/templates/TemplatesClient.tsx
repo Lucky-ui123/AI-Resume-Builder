@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { LayoutTemplate, CheckCircle2, Search, Filter } from 'lucide-react';
+import { LayoutTemplate, Search } from 'lucide-react';
 import { templates, TemplateCategory } from '@/lib/templates';
 import { useRouter } from 'next/navigation';
 import { TemplateMiniPreview } from '@/components/resume/TemplateMiniPreview';

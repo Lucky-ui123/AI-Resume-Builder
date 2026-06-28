@@ -1,4 +1,4 @@
-import { Resume, User, JobDescription, AtsReport, AiSuggestion, CoverLetter } from '@/types';
+import { Resume, User, JobDescription, AtsReport, CoverLetter } from '@/types';
 
 export const mockUser: User = {
   id: 'usr_123',
@@ -127,11 +127,13 @@ export const mockJobDescription: JobDescription = {
 export const mockAtsReport: AtsReport = {
   id: 'ats_123',
   resumeId: 'res_123',
-  jobDescriptionId: 'jd_123',
+  resumeTitle: 'Senior Frontend Developer Resume',
   overallScore: 82,
+  contactInfoScore: 85,
+  structureScore: 90,
   keywordScore: 75,
-  formattingScore: 90,
   readabilityScore: 85,
+  formattingScore: 90,
   completenessScore: 100,
   missingKeywords: ['Jest', 'Cypress', 'AWS', 'Vercel'],
   suggestions: [
@@ -148,7 +150,15 @@ export const mockAtsReport: AtsReport = {
       section: 'Projects',
     },
   ],
+  created_at: new Date().toISOString(),
 };
+
+export interface AiSuggestion {
+  id: string;
+  section: string;
+  originalText: string;
+  improvedText: string;
+}
 
 export const mockAiSuggestions: AiSuggestion[] = [
   {
@@ -168,8 +178,13 @@ export const mockAiSuggestions: AiSuggestion[] = [
 export const mockCoverLetter: CoverLetter = {
   id: 'cl_123',
   resumeId: 'res_123',
-  jobDescriptionId: 'jd_123',
-  content: `Dear Hiring Manager,\n\nI am writing to express my interest in the Lead React Developer position at InnovateTech. With over 6 years of experience building scalable web applications and leading frontend teams, I am confident in my ability to contribute effectively to your core product team.\n\nIn my current role at TechFlow Solutions, I led the successful rebuild of our core SaaS platform using Next.js and Tailwind CSS, which improved our load times by 40%. I noticed that InnovateTech values performance optimization and modern React architectures, which aligns perfectly with my recent work implementing complex state management solutions with Zustand and React Query.\n\nFurthermore, my AWS Certified Developer credential and experience mentoring junior developers position me well to take on the technical and leadership responsibilities this role demands. I would welcome the opportunity to discuss how my technical skills and leadership experience can help drive InnovateTech's frontend initiatives forward.\n\nThank you for considering my application. I look forward to the possibility of speaking with you.\n\nSincerely,\nAlex Johnson`,
+  title: 'Cover Letter for InnovateTech',
+  jobTitle: 'Lead React Developer',
+  companyName: 'InnovateTech',
+  jobDescription: 'We are looking for a Lead React Developer to join our core product team. You will be responsible for architecting and building out new features using React, Next.js, and TypeScript.',
+  tone: 'Professional',
+  length: 'Medium',
+  content: `Dear Hiring Manager,\n\nI am writing to express my interest in the Lead React Developer position at InnovateTech. With over 6 years of experience building scalable web applications and leading frontend teams, I am confident in my ability to contribute effectively to your core product team.\n\nIn my current role at TechFlow Solutions, I led the successful rebuild of our core SaaS platform using Next.js and Tailwind CSS, which improved our load times by 40%. I noticed that InnovateTech values performance optimization and modern React architectures, which aligns perfectly with my recent work implementing complex state management solutions with Zustand and React Query.\n\nFurthermore, my AWS Certified Developer credential and experience mentoring junior developers position well to take on the technical and leadership responsibilities this role demands. I would welcome the opportunity to discuss how my technical skills and leadership experience can help drive InnovateTech's frontend initiatives forward.\n\nThank you for considering my application. I look forward to the possibility of speaking with you.\n\nSincerely,\nAlex Johnson`,
   lastModified: new Date().toISOString(),
 };
 

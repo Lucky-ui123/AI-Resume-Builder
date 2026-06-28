@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useResumes } from '@/context/ResumeContext';
-import { Resume, AtsReport } from '@/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { AtsReport } from '@/types';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { 
   CheckCircle, AlertCircle, AlertTriangle, FileSearch, Sparkles, 
-  Download, FileCheck, RefreshCw, Loader2, Info 
+  Download, FileCheck, Loader2, Info 
 } from 'lucide-react';
 import { saveAtsReportAction, analyzeAtsAction } from '../career-actions';
 import { lsSaveAtsReport } from '@/lib/local-storage-service';
@@ -18,18 +18,12 @@ import { showSuccess, showError, showLoading, dismissToast } from '@/lib/toast';
 
 export default function AtsClient() {
   const { resumes, isLoading: resumesLoading } = useResumes();
-  const [selectedResumeId, setSelectedResumeId] = useState('');
+  const [selectedResumeIdState, setSelectedResumeId] = useState('');
+  const selectedResumeId = selectedResumeIdState || (resumes.length > 0 ? resumes[0].id : '');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [report, setReport] = useState<AtsReport | null>(null);
   const [reportsList, setReportsList] = useState<AtsReport[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const reportPrintRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (resumes.length > 0 && !selectedResumeId) {
-      setSelectedResumeId(resumes[0].id);
-    }
-  }, [resumes, selectedResumeId]);
 
   // Load saved ATS reports on mount
   useEffect(() => {
@@ -78,15 +72,19 @@ export default function AtsClient() {
     setIsSaving(true);
     const toastId = showLoading('Saving ATS Report...');
     try {
+      let savedId = '';
       if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
         const res = await saveAtsReportAction(report);
         if (res.error) throw new Error(res.error);
-        report.id = res.id;
+        savedId = res.id;
       } else {
         const saved = lsSaveAtsReport(report);
-        report.id = saved.id;
+        savedId = saved.id;
       }
-      setReportsList(prev => [report, ...prev]);
+      
+      const updatedReport = { ...report, id: savedId };
+      setReport(updatedReport);
+      setReportsList(prev => [updatedReport, ...prev]);
       showSuccess('ATS report saved successfully!');
     } catch (err) {
       console.error(err);

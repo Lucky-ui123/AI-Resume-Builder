@@ -18,8 +18,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen
 } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const navigation = [
@@ -36,7 +36,6 @@ const navigation = [
 
 export default function DashboardSidebar({ 
   onClose, 
-  userPlan = 'free',
   userEmail = '',
   userName = 'User',
   isCollapsed = false,
@@ -44,7 +43,7 @@ export default function DashboardSidebar({
 }: { 
   onClose?: () => void, 
   userPlan?: string,
-  userEmail?: string,
+  userEmail?: string, 
   userName?: string,
   isCollapsed?: boolean,
   onToggleCollapse?: () => void

@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import DashboardSidebar from '@/components/layout/DashboardSidebar';
 import { Menu, FileText } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+
 import { ResumeProvider } from '@/context/ResumeContext';
 
 export default function DashboardLayoutWrapper({

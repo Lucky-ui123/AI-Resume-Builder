@@ -1,10 +1,9 @@
 import LinkedinClient from './LinkedinClient';
-import { getUserSubscription, getResume, getAllResumes } from '@/lib/db-service';
+import { getUserSubscription } from '@/lib/db-service';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import Link from 'next/link';
-import { buttonVariants, Button } from '@/components/ui/button';
-import { Lock, FileText, Plus } from 'lucide-react';
-import { Resume } from '@/types';
+import { buttonVariants } from '@/components/ui/button';
+import { Lock } from 'lucide-react';
 
 export default async function LinkedinPage({ searchParams }: { searchParams: { id?: string } }) {
   const { limits } = await getUserSubscription();

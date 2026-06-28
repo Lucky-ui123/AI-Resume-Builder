@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pdf from 'pdf-parse';
+import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
 
 export async function POST(req: NextRequest) {
@@ -14,7 +14,8 @@ export async function POST(req: NextRequest) {
     let text = '';
 
     if (file.name.endsWith('.pdf')) {
-      const parsed = await pdf(buffer);
+      const parser = new PDFParse({ data: buffer });
+      const parsed = await parser.getText();
       text = parsed.text;
     } else if (file.name.endsWith('.docx')) {
       const result = await mammoth.extractRawText({ buffer });
@@ -24,8 +25,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ text });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('File parsing error:', err);
-    return NextResponse.json({ error: err.message || 'Failed to parse file' }, { status: 500 });
+    const errorMessage = err instanceof Error ? err.message : 'Failed to parse file';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

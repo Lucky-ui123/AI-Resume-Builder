@@ -14,7 +14,7 @@
  *   localStorage-backed resumes by checking id.startsWith('ls_').
  */
 
-import { Resume } from '@/types';
+import { Resume, MatchReport, AtsReport, CoverLetter, ResumeSuggestion } from '@/types';
 
 const STORAGE_KEY = 'hirecraft_resumes';
 

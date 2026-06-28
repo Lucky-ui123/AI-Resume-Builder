@@ -11,11 +11,11 @@ const getGlobalCSS = () => {
         for (const rule of Array.from(styleSheet.cssRules || [])) {
           cssText += rule.cssText + '\n';
         }
-      } catch (e) {
+      } catch {
         // Ignore CORS errors for external stylesheets
       }
     }
-  } catch (e) {
+  } catch {
     // Ignore stylesheet reading errors
   }
   return cssText;
