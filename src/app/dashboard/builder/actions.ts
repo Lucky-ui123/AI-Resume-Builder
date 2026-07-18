@@ -1,6 +1,6 @@
 'use server'
 
-import { saveResume, saveResumeVersion, getResumeVersions, getResumeVersionData } from '@/lib/db-service';
+import { saveResume, saveResumeVersion, getResumeVersions, getResumeVersionData, getUserSubscription } from '@/lib/db-service';
 import { Resume } from '@/types';
 import { revalidatePath } from 'next/cache';
 
@@ -13,6 +13,11 @@ export async function saveResumeAction(resume: Resume) {
 }
 
 export async function createResumeAction(title: string, targetRole: string) {
+  const { userName, userEmail } = await getUserSubscription();
+  const nameParts = userName.trim().split(/\s+/);
+  const firstName = nameParts[0] || '';
+  const lastName = nameParts.slice(1).join(' ') || '';
+
   const emptyResume = {
     id: '',
     userId: '', // Populated by server
@@ -27,7 +32,13 @@ export async function createResumeAction(title: string, targetRole: string) {
     },
     lastModified: new Date().toISOString(),
     isDraft: true,
-    personalInfo: { firstName: '', lastName: '', email: '', phone: '', location: '' },
+    personalInfo: { 
+      firstName: firstName !== 'User' ? firstName : '', 
+      lastName: firstName !== 'User' ? lastName : '', 
+      email: userEmail || '', 
+      phone: '', 
+      location: '' 
+    },
     summary: '',
     experience: [],
     education: [],

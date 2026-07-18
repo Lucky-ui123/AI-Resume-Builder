@@ -185,3 +185,6 @@ CREATE POLICY "Users can view own linkedin profiles" ON public.linkedin_profiles
 CREATE POLICY "Users can insert own linkedin profiles" ON public.linkedin_profiles FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own linkedin profiles" ON public.linkedin_profiles FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own linkedin profiles" ON public.linkedin_profiles FOR DELETE USING (auth.uid() = user_id);
+
+-- NOTE: The single source of truth for the database schema changes is the migrations folder under supabase/migrations/.
+-- This file (supabase_schema.sql) is kept only as a legacy static reference and should not be used directly for deployments.

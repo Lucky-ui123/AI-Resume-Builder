@@ -30,11 +30,38 @@ import { ResumeScores } from '@/types';
 
 type SaveState = 'clean' | 'editing' | 'saving' | 'saved' | 'error' | 'offline';
 
-export default function BuilderClient({ initialResume }: { initialResume: Resume | null }) {
+export default function BuilderClient({ 
+  initialResume,
+  userProfile
+}: { 
+  initialResume: Resume | null;
+  userProfile?: { userName: string; userEmail: string };
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { saveResume } = useResumes();
-  const [resume, setResume] = useState<Resume>(initialResume || emptyResume);
+
+  const getStartingResume = () => {
+    if (initialResume) return initialResume;
+    
+    const name = userProfile?.userName || '';
+    const email = userProfile?.userEmail || '';
+    const nameParts = name.trim().split(/\s+/);
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+    
+    return {
+      ...emptyResume,
+      personalInfo: {
+        ...emptyResume.personalInfo,
+        firstName: firstName !== 'User' ? firstName : '',
+        lastName: firstName !== 'User' ? lastName : '',
+        email: email || ''
+      }
+    };
+  };
+
+  const [resume, setResume] = useState<Resume>(getStartingResume);
   const deferredResume = useDeferredValue(resume);
   const [showPreviewMobile, setShowPreviewMobile] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -162,7 +189,7 @@ export default function BuilderClient({ initialResume }: { initialResume: Resume
     if (!initialResume) {
       const idParam = searchParams.get('id');
       
-      if (idParam) {
+      if (idParam && idParam !== 'new') {
         // If server returned null but we have an ls_ ID in URL, we need to load from localStorage
         if (idParam.startsWith('ls_')) {
           import('@/lib/local-storage-service').then(({ lsGetResume }) => {

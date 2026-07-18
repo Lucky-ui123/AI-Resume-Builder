@@ -4,7 +4,8 @@ import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
 import { OpenAI } from 'openai';
 import { emptyResume } from '@/lib/mock-data';
-import { checkAndIncrementAiUsage } from '@/lib/db-service';
+import { checkAndIncrementAiUsage, getUserSubscription } from '@/lib/db-service';
+import { GeminiOpenAiWrapper } from '@/lib/gemini-compat';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -67,8 +68,9 @@ export async function POST(req: Request) {
     }
 
     const openaiKey = process.env.OPENAI_API_KEY;
-    if (!openaiKey) {
-      // Fallback to empty data when no OpenAI key
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!openaiKey && !geminiKey) {
+      // Fallback to empty data when no keys are configured
       return NextResponse.json({ 
         resume: { ...emptyResume, title: file.name ? `Parsed ${file.name}` : 'Parsed Resume' },
         confidence: {
@@ -83,7 +85,11 @@ export async function POST(req: Request) {
       });
     }
 
-    const openai = new OpenAI({ apiKey: openaiKey });
+    const openai = openaiKey 
+      ? new OpenAI({ apiKey: openaiKey })
+      : new GeminiOpenAiWrapper(geminiKey) as any;
+
+    const aiModel = openaiKey ? 'gpt-4o-mini' : 'gemini-3.5-flash';
 
     const systemPrompt = `You are an expert ATS resume parser. 
 Extract the following text into a structured JSON format. You MUST return exactly this schema:
@@ -116,7 +122,7 @@ Rules:
 5. Return ONLY valid JSON matching the schema. No markdown wrappers.`;
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: aiModel,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Extract from this resume:\n\n${extractedText}` },
@@ -138,6 +144,29 @@ Rules:
       templateId: 'classic-ats',
       ...structuredResume
     };
+
+    // Override personalInfo name and email with logged in user details if available
+    try {
+      const { userName, userEmail } = await getUserSubscription();
+      if (userName && userName !== 'User') {
+        const nameParts = userName.trim().split(/\s+/);
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+        if (!finalResume.personalInfo) {
+          finalResume.personalInfo = {};
+        }
+        finalResume.personalInfo.firstName = firstName;
+        finalResume.personalInfo.lastName = lastName;
+      }
+      if (userEmail) {
+        if (!finalResume.personalInfo) {
+          finalResume.personalInfo = {};
+        }
+        finalResume.personalInfo.email = userEmail;
+      }
+    } catch (e) {
+      // ignore
+    }
 
     return NextResponse.json({ resume: finalResume, confidence });
   } catch (error: unknown) {

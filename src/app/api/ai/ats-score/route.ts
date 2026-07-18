@@ -7,10 +7,13 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { resume, jobDescription } = body;
     
-    // Validate auth and ownership
-    if (!resume?.id) return NextResponse.json({ error: 'Resume ID is required' }, { status: 400 });
-    const dbResume = await getResume(resume.id);
-    if (!dbResume) return NextResponse.json({ error: 'Unauthorized or invalid resume' }, { status: 401 });
+    // Validate auth and ownership if Supabase is configured
+    const isSupabaseConfigured = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (isSupabaseConfigured) {
+      if (!resume?.id) return NextResponse.json({ error: 'Resume ID is required' }, { status: 400 });
+      const dbResume = await getResume(resume.id);
+      if (!dbResume) return NextResponse.json({ error: 'Unauthorized or invalid resume' }, { status: 401 });
+    }
     if (!resume || !jobDescription) return NextResponse.json({ error: 'Resume and jobDescription are required' }, { status: 400 });
 
     const result = await generateATSScore(resume, jobDescription);

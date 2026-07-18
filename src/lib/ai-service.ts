@@ -1,11 +1,29 @@
 import OpenAI from 'openai';
 import { Resume } from '@/types';
+import { GeminiOpenAiWrapper } from './gemini-compat';
 
-// Initialize OpenAI conditionally
-// In a Next.js Edge environment or Server Component, this runs on the server.
-const openai = process.env.OPENAI_API_KEY 
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  : null;
+// Initialize OpenAI/Gemini conditionally
+const getAiClientAndModel = () => {
+  const openAiKey = process.env.OPENAI_API_KEY;
+  if (openAiKey) {
+    return {
+      client: new OpenAI({ apiKey: openAiKey }),
+      model: 'gpt-4o-mini'
+    };
+  }
+
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (geminiKey) {
+    return {
+      client: new GeminiOpenAiWrapper(geminiKey) as any,
+      model: 'gemini-3.5-flash'
+    };
+  }
+
+  return { client: null, model: '' };
+};
+
+const { client: openai, model: aiModel } = getAiClientAndModel();
 
 /**
  * Helper to determine if we should use mock data
@@ -35,7 +53,7 @@ export async function improveSummary(currentSummary: string): Promise<string> {
   }
 
   const response = await openai!.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: aiModel,
     messages: [
       { role: 'system', content: BASE_SYSTEM_PROMPT },
       { role: 'user', content: `Improve the following resume professional summary to make it more impactful and ATS-friendly. Do not invent facts.\n\nCurrent Summary:\n${currentSummary}` }
@@ -54,7 +72,7 @@ export async function improveExperience(role: string, company: string, descripti
   }
 
   const response = await openai!.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: aiModel,
     messages: [
       { role: 'system', content: BASE_SYSTEM_PROMPT },
       { role: 'user', content: `Rewrite the following work experience bullet points to be more action-oriented (using strong verbs). Format as a clean bulleted list using the "• " symbol. Do NOT invent fake percentages or revenue numbers.\n\nRole: ${role}\nCompany: ${company}\nCurrent Description:\n${description}` }
@@ -82,7 +100,7 @@ export async function generateATSScore(resume: Resume, jobDescription: string) {
 
   const resumeText = JSON.stringify(resume);
   const response = await openai!.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: aiModel,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: `${BASE_SYSTEM_PROMPT}\nYou are evaluating a resume against a job description. Output strict JSON with this schema: { "score": number (0-100), "missingKeywords": string[], "suggestions": string[] }` },
@@ -102,7 +120,7 @@ export async function extractKeywords(jobDescription: string): Promise<string[]>
   }
 
   const response = await openai!.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: aiModel,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: 'Extract the top 10 most critical hard skills and keywords from the job description. Output strictly JSON: { "keywords": string[] }' },
@@ -124,7 +142,7 @@ export async function matchResume(resume: Resume, jobDescription: string): Promi
 
   const resumeText = JSON.stringify(resume);
   const response = await openai!.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: aiModel,
     messages: [
       { role: 'system', content: BASE_SYSTEM_PROMPT },
       { role: 'user', content: `Provide a short, actionable paragraph (max 4 sentences) advising the candidate on how to tweak their resume to better match the provided job description.\n\nJob Description:\n${jobDescription}\n\nResume:\n${resumeText}` }
@@ -150,7 +168,7 @@ export async function generateCoverLetter(resume: Resume, jobDescription: string
   });
 
   const response = await openai!.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: aiModel,
     messages: [
       { role: 'system', content: `${BASE_SYSTEM_PROMPT}\nWrite a compelling, professional cover letter based on the provided resume and job description. Do not include placeholder brackets like [Company Name] if the company is in the JD. If unknown, write it naturally without brackets. Keep it to 3-4 paragraphs.` },
       { role: 'user', content: `Job Description:\n${jobDescription}\n\nResume:\n${resumeText}` }
@@ -169,7 +187,7 @@ export async function generateLinkedInHeadline(resume: Resume): Promise<string> 
   }
 
   const response = await openai!.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: aiModel,
     messages: [
       { role: 'system', content: 'Generate a highly professional, ATS-friendly LinkedIn headline (max 120 chars) based on the user summary and target role. Do not use emojis.' },
       { role: 'user', content: `Target Role: ${resume.targetRole}\nSummary: ${resume.summary}` }
@@ -189,7 +207,7 @@ export async function generateLinkedInAbout(resume: Resume): Promise<string> {
 
   const resumeText = JSON.stringify({ summary: resume.summary, experience: resume.experience, skills: resume.skills });
   const response = await openai!.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: aiModel,
     messages: [
       { role: 'system', content: `${BASE_SYSTEM_PROMPT}\nWrite an engaging, 2-3 paragraph LinkedIn "About" section. Use first-person perspective. It should be friendly but professional.` },
       { role: 'user', content: `Resume Data:\n${resumeText}` }
@@ -208,7 +226,7 @@ export async function suggestSkills(targetRole: string): Promise<string[]> {
   }
 
   const response = await openai!.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: aiModel,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: 'You are an ATS expert. Suggest the top 8 most demanded skills for a given role. Return strictly JSON: { "skills": string[] }' },

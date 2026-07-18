@@ -106,7 +106,7 @@ export class LocalHeuristicAnalyzer {
             impact: 'High',
             targetField: `experience[${idx}].description`,
             currentText: exp.description,
-            suggestedText: exp.description + '\\n• Improved process efficiency by 25%.'
+            suggestedText: exp.description + '\n• Improved process efficiency by 25%.'
           });
         }
 

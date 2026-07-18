@@ -8,6 +8,7 @@ export interface PlanLimits {
   hasCoverLetter: boolean;
   hasLinkedin: boolean;
   hasPriorityFeatures: boolean;
+  versionLimit: number;
 }
 
 export const SUBSCRIPTION_PLANS: Record<PlanType, PlanLimits> = {
@@ -19,6 +20,7 @@ export const SUBSCRIPTION_PLANS: Record<PlanType, PlanLimits> = {
     hasCoverLetter: false,
     hasLinkedin: false,
     hasPriorityFeatures: false,
+    versionLimit: 0,
   },
   pro: {
     resumes: 10,
@@ -28,6 +30,7 @@ export const SUBSCRIPTION_PLANS: Record<PlanType, PlanLimits> = {
     hasCoverLetter: true,
     hasLinkedin: true,
     hasPriorityFeatures: false,
+    versionLimit: 10,
   },
   premium: {
     resumes: Infinity,
@@ -37,5 +40,6 @@ export const SUBSCRIPTION_PLANS: Record<PlanType, PlanLimits> = {
     hasCoverLetter: true,
     hasLinkedin: true,
     hasPriorityFeatures: true,
+    versionLimit: 50,
   }
 };

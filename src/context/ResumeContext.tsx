@@ -86,6 +86,30 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
   // Load initially
   useEffect(() => {
     let ignore = false;
+
+    // Prune localStorage drafts older than 7 days
+    try {
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('hirecraft_draft_')) {
+          const draftStr = localStorage.getItem(key);
+          if (draftStr) {
+            const draft = JSON.parse(draftStr);
+            if (draft && draft.lastModified) {
+              const lastModifiedTime = new Date(draft.lastModified).getTime();
+              if (lastModifiedTime < sevenDaysAgo) {
+                localStorage.removeItem(key);
+                i--; // Adjust index because key was removed
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error cleaning up local drafts:', e);
+    }
+
     fetchResumesData().then(merged => {
       if (!ignore) {
         setResumes(merged);

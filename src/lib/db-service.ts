@@ -2,6 +2,8 @@ import { createClient, createAdminClient } from './supabase/server';
 import { mockSubscription } from './mock-data';
 import { Resume, MatchReport, AtsReport, CoverLetter, ResumeSuggestion, AtsSuggestion } from '@/types';
 import { SUBSCRIPTION_PLANS, PlanType } from './subscription-config';
+import { cookies } from 'next/headers';
+import { Telemetry } from './telemetry';
 
 // Helper to check if Supabase is configured
 function isSupabaseConfigured() {
@@ -34,14 +36,23 @@ export async function resetUsageIfBillingPeriodExpired(user_id: string, currentE
 
 export async function getUserSubscription() {
   if (!isSupabaseConfigured()) {
+    let userName = 'User';
+    let userEmail = 'demo@example.com';
+    try {
+      const cookieStore = await cookies();
+      userName = cookieStore.get('mock_user_name')?.value || 'User';
+      userEmail = cookieStore.get('mock_user_email')?.value || 'demo@example.com';
+    } catch (e) {
+      // ignore
+    }
     const limits = SUBSCRIPTION_PLANS[mockSubscription.plan];
     return {
       plan: mockSubscription.plan,
       aiUsageCount: mockSubscription.aiUsageCount,
       exportUsageCount: mockSubscription.exportUsageCount,
       limits,
-      userEmail: 'demo@example.com',
-      userName: 'User'
+      userEmail,
+      userName
     };
   }
 
@@ -239,22 +250,26 @@ export async function getResume(id?: string): Promise<Resume | null> {
 }
 
 export async function saveResume(resume: Resume): Promise<{ id: string; error: string | null }> {
+  const startTime = Date.now();
+  const traceId = crypto.randomUUID();
+
   if (!isSupabaseConfigured()) {
-    // Should be handled by client before calling action, but fallback if reached
     return { id: resume.id || 'res_123', error: null };
   }
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { id: '', error: 'Unauthorized' };
+  if (!user) {
+    Telemetry.recordCounter('resume.save', 1, 'failure', { error: 'Unauthorized', traceId });
+    return { id: '', error: 'Unauthorized' };
+  }
 
-  // A resume is "new" when it has no ID, has the placeholder 'new' ID, or
-  // has an ls_ ID (previously localStorage-backed, now being synced to Supabase).
   const isNew = !resume.id || resume.id === 'new' || resume.id.startsWith('ls_');
   if (isNew) {
     const sub = await getUserSubscription();
     const { count } = await supabase.from('resumes').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
     if ((count || 0) >= sub.limits.resumes) {
+      Telemetry.recordCounter('resume.save', 1, 'warning', { error: 'Resume limit reached', userId: user.id, traceId });
       return { id: '', error: 'Resume limit reached. Please upgrade your plan to create more resumes.' };
     }
   }
@@ -272,14 +287,36 @@ export async function saveResume(resume: Resume): Promise<{ id: string; error: s
     content: content,
   };
 
-  if (!isNew) {
-    const { data, error } = await supabase.from('resumes').update(dbResume).eq('id', id).select('id').single();
-    if (error) return { id: '', error: error.message };
-    return { id: data.id, error: null };
-  } else {
-    const { data, error } = await supabase.from('resumes').insert(dbResume).select('id').single();
-    if (error) return { id: '', error: error.message };
-    return { id: data.id, error: null };
+  try {
+    if (!isNew) {
+      const { data, error } = await supabase.from('resumes').update(dbResume).eq('id', id).select('id').single();
+      const duration = Date.now() - startTime;
+      if (error) {
+        Telemetry.recordLatency('resume.save', duration, 'failure', { error: error.message, userId: user.id, resumeId: id, traceId });
+        Telemetry.recordCounter('resume.save', 1, 'failure', { error: error.message, userId: user.id, resumeId: id, traceId });
+        return { id: '', error: error.message };
+      }
+      Telemetry.recordLatency('resume.save', duration, 'success', { userId: user.id, resumeId: data.id, traceId });
+      Telemetry.recordCounter('resume.save', 1, 'success', { userId: user.id, resumeId: data.id, traceId });
+      return { id: data.id, error: null };
+    } else {
+      const { data, error } = await supabase.from('resumes').insert(dbResume).select('id').single();
+      const duration = Date.now() - startTime;
+      if (error) {
+        Telemetry.recordLatency('resume.save', duration, 'failure', { error: error.message, userId: user.id, traceId });
+        Telemetry.recordCounter('resume.save', 1, 'failure', { error: error.message, userId: user.id, traceId });
+        return { id: '', error: error.message };
+      }
+      Telemetry.recordLatency('resume.save', duration, 'success', { userId: user.id, resumeId: data.id, traceId });
+      Telemetry.recordCounter('resume.save', 1, 'success', { userId: user.id, resumeId: data.id, traceId });
+      return { id: data.id, error: null };
+    }
+  } catch (err: unknown) {
+    const duration = Date.now() - startTime;
+    const errMsg = err instanceof Error ? err.message : String(err);
+    Telemetry.recordLatency('resume.save', duration, 'failure', { error: errMsg, userId: user.id, traceId });
+    Telemetry.recordCounter('resume.save', 1, 'failure', { error: errMsg, userId: user.id, traceId });
+    return { id: '', error: errMsg };
   }
 }
 
@@ -302,16 +339,125 @@ export async function getResumeVersions(resumeId: string) {
 }
 
 export async function saveResumeVersion(resumeId: string, name: string, resumeContent: Resume) {
+  const traceId = crypto.randomUUID();
+  const startTime = Date.now();
+
   if (!isSupabaseConfigured()) {
     return { error: null };
   }
 
+  const sub = await getUserSubscription();
+  const limit = sub.limits.versionLimit;
+  const userId = sub.userId || 'unknown';
+
+  if (limit <= 0) {
+    console.warn(`[Version History] [Trace: ${traceId}] User ${userId} blocked from saving version for resume ${resumeId}. Plan "${sub.plan}" limit is 0.`);
+    Telemetry.recordCounter('resume_version.save', 1, 'warning', { reason: 'Plan limit zero', userId, resumeId, traceId });
+    return { error: 'Your current subscription plan does not support version history. Please upgrade your plan.' };
+  }
+
   const supabase = await createClient();
+
+  // Try calling the RPC first
+  try {
+    console.log(`[Version History] [Trace: ${traceId}] Attempting atomic database RPC save_resume_version_atomic. User ID: ${userId}, Resume ID: ${resumeId}`);
+    const { data: rpcData, error: rpcError } = await supabase.rpc('save_resume_version_atomic', {
+      p_resume_id: resumeId,
+      p_name: name,
+      p_content: resumeContent
+    });
+
+    const duration = Date.now() - startTime;
+
+    if (!rpcError) {
+      const res = rpcData as { error?: string; success?: boolean } | null;
+      if (res && res.error) {
+        console.warn(`[Version History] [Trace: ${traceId}] RPC save returned application error. User ID: ${userId}, Resume ID: ${resumeId}, Duration: ${duration}ms, Error: ${res.error}`);
+        Telemetry.recordLatency('resume_version.save.rpc', duration, 'failure', { error: res.error, userId, resumeId, traceId });
+        Telemetry.recordCounter('resume_version.save', 1, 'failure', { error: res.error, userId, resumeId, traceId });
+        return { error: res.error };
+      }
+      console.log(`[Version History] [Trace: ${traceId}] RPC save completed successfully. User ID: ${userId}, Resume ID: ${resumeId}, Duration: ${duration}ms`);
+      Telemetry.recordLatency('resume_version.save.rpc', duration, 'success', { userId, resumeId, traceId });
+      Telemetry.recordCounter('resume_version.save', 1, 'success', { method: 'rpc', userId, resumeId, traceId });
+      return { error: null };
+    }
+
+    // Fall back to JS-level if RPC function doesn't exist
+    if (rpcError.code === '42883' || rpcError.message.includes('function does not exist')) {
+      console.warn(`[Version History] [Trace: ${traceId}] Stored procedure "save_resume_version_atomic" not found in Supabase (code: ${rpcError.code}). Activating client-side JS fallback.`);
+      Telemetry.recordCounter('resume_version.save.rpc_fallback', 1, 'warning', { errorCode: rpcError.code, userId, resumeId, traceId });
+    } else {
+      console.error(`[Version History] [Trace: ${traceId}] RPC save failed with database error. User ID: ${userId}, Resume ID: ${resumeId}, Duration: ${duration}ms, Error: ${rpcError.message}`);
+      Telemetry.recordLatency('resume_version.save.rpc', duration, 'failure', { error: rpcError.message, userId, resumeId, traceId });
+      Telemetry.recordCounter('resume_version.save', 1, 'failure', { error: rpcError.message, userId, resumeId, traceId });
+      return { error: rpcError.message };
+    }
+  } catch (err: unknown) {
+    const duration = Date.now() - startTime;
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[Version History] [Trace: ${traceId}] Exception during database RPC save. User ID: ${userId}, Resume ID: ${resumeId}, Duration: ${duration}ms, Error:`, err);
+    Telemetry.recordLatency('resume_version.save.rpc', duration, 'failure', { error: errMsg, userId, resumeId, traceId });
+    Telemetry.recordCounter('resume_version.save', 1, 'failure', { error: errMsg, userId, resumeId, traceId });
+  }
+
+  // Fallback to JS-level atomic logic (oldest pruning first, then insert)
+  console.log(`[Version History] [Trace: ${traceId}] Running JS fallback version save. User ID: ${userId}, Resume ID: ${resumeId}`);
+  
+  const { data: versions, error: fetchErr } = await supabase
+    .from('resume_versions')
+    .select('id')
+    .eq('resume_id', resumeId)
+    .order('created_at', { ascending: true });
+
+  if (fetchErr) {
+    const duration = Date.now() - startTime;
+    console.error(`[Version History] [Trace: ${traceId}] Fallback fetch existing versions failed. User ID: ${userId}, Resume ID: ${resumeId}, Duration: ${duration}ms, Error: ${fetchErr.message}`);
+    Telemetry.recordLatency('resume_version.save.fallback', duration, 'failure', { error: fetchErr.message, userId, resumeId, traceId });
+    Telemetry.recordCounter('resume_version.save', 1, 'failure', { error: fetchErr.message, userId, resumeId, traceId });
+    return { error: fetchErr.message };
+  }
+
+  let deletedCount = 0;
+  if (versions && versions.length >= limit) {
+    const excessCount = versions.length - limit + 1;
+    const idsToDelete = versions.slice(0, excessCount).map(v => v.id);
+    console.log(`[Version History] [Trace: ${traceId}] Pruning oldest ${excessCount} version(s). User ID: ${userId}, Resume ID: ${resumeId} (Limit: ${limit})`);
+    
+    const { data: delData, error: deleteErr } = await supabase
+      .from('resume_versions')
+      .delete()
+      .in('id', idsToDelete)
+      .select('id');
+      
+    if (deleteErr) {
+      const duration = Date.now() - startTime;
+      console.error(`[Version History] [Trace: ${traceId}] Fallback delete of oldest versions failed. User ID: ${userId}, Resume ID: ${resumeId}, Duration: ${duration}ms, Error: ${deleteErr.message}`);
+      Telemetry.recordLatency('resume_version.save.fallback', duration, 'failure', { error: deleteErr.message, userId, resumeId, traceId });
+      Telemetry.recordCounter('resume_version.save', 1, 'failure', { error: deleteErr.message, userId, resumeId, traceId });
+      return { error: deleteErr.message };
+    }
+    deletedCount = delData ? delData.length : excessCount;
+    Telemetry.recordCounter('resume_version.prune', deletedCount, 'success', { userId, resumeId, traceId });
+  }
+
   const { error } = await supabase.from('resume_versions').insert({
     resume_id: resumeId,
     name,
     content: resumeContent
   });
+
+  const duration = Date.now() - startTime;
+
+  if (error) {
+    console.error(`[Version History] [Trace: ${traceId}] Fallback version save failed on insert. User ID: ${userId}, Resume ID: ${resumeId}, Duration: ${duration}ms, Error: ${error.message}`);
+    Telemetry.recordLatency('resume_version.save.fallback', duration, 'failure', { error: error.message, userId, resumeId, traceId });
+    Telemetry.recordCounter('resume_version.save', 1, 'failure', { error: error.message, userId, resumeId, traceId });
+  } else {
+    console.log(`[Version History] [Trace: ${traceId}] Fallback version save successfully completed. User ID: ${userId}, Resume ID: ${resumeId}, Duration: ${duration}ms, Pruned: ${deletedCount} row(s)`);
+    Telemetry.recordLatency('resume_version.save.fallback', duration, 'success', { userId, resumeId, traceId });
+    Telemetry.recordCounter('resume_version.save', 1, 'success', { method: 'fallback', userId, resumeId, traceId });
+  }
 
   return { error: error ? error.message : null };
 }

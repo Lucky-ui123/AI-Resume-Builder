@@ -1,9 +1,28 @@
 import OpenAI from 'openai';
 import { Resume, MatchReport, AtsReport, ResumeScores, ResumeSuggestion } from '@/types';
+import { GeminiOpenAiWrapper } from './gemini-compat';
 
-const openai = process.env.OPENAI_API_KEY 
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  : null;
+const getAiClientAndModel = () => {
+  const openAiKey = process.env.OPENAI_API_KEY;
+  if (openAiKey) {
+    return {
+      client: new OpenAI({ apiKey: openAiKey }),
+      model: 'gpt-4o-mini'
+    };
+  }
+
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (geminiKey) {
+    return {
+      client: new GeminiOpenAiWrapper(geminiKey) as any,
+      model: 'gemini-3.5-flash'
+    };
+  }
+
+  return { client: null, model: '' };
+};
+
+const { client: openai, model: aiModel } = getAiClientAndModel();
 
 const shouldUseMock = () => {
   return !openai;
@@ -68,7 +87,7 @@ export class JobMatcherService {
     }
 
     const response = await openai!.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: aiModel,
       response_format: { type: 'json_object' },
       messages: [
         {
@@ -144,7 +163,7 @@ export class ATSService {
 
     const resumeText = JSON.stringify(resume);
     const response = await openai!.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: aiModel,
       response_format: { type: 'json_object' },
       messages: [
         {
@@ -232,7 +251,7 @@ export class ResumeSuggestionService {
 
     try {
       const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: aiModel,
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: systemPrompt },
@@ -295,7 +314,7 @@ ${name}`;
     Resume Details: ${resumeText}`;
 
     const response = await openai!.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: aiModel,
       messages: [
         { role: 'system', content: 'You are an elite career strategist. Write a cover letter using candidate info and job details. Maintain formatting.' },
         { role: 'user', content: prompt }
@@ -314,7 +333,7 @@ ${name}`;
     }
 
     const response = await openai!.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: aiModel,
       messages: [
         { role: 'system', content: 'You are a professional copywriter. Rewrite the cover letter text based on the user instructions.' },
         { role: 'user', content: `Cover Letter:\n${content}\n\nInstruction: ${instruction}` }
@@ -378,7 +397,7 @@ export class ResumeBuilderService {
     }
 
     const response = await openai!.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: aiModel,
       response_format: { type: 'json_object' },
       messages: [
         {

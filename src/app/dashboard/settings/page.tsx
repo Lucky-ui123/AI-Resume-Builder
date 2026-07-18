@@ -8,6 +8,7 @@ import { Settings, CreditCard, LogOut, Activity } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { getUserSubscription, getDashboardStats } from '@/lib/db-service';
+import { updateProfileAction } from './actions';
 import Link from 'next/link';
 
 export default async function SettingsPage() {
@@ -40,42 +41,44 @@ export default async function SettingsPage() {
         </TabsList>
 
         <TabsContent value="general" className="space-y-6">
-          <Card>
-            <CardHeader className="bg-secondary border-b">
-              <CardTitle>Profile Information</CardTitle>
-              <CardDescription>Update your personal details visible to the system.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center gap-6">
-                <Avatar className="h-20 w-20">
-                  <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
-                    {userName.substring(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="space-y-1">
-                  <Button variant="outline" size="sm">Change Avatar</Button>
-                  <p className="text-xs text-muted-foreground">JPG, GIF or PNG. 1MB max.</p>
+          <form action={updateProfileAction}>
+            <Card>
+              <CardHeader className="bg-secondary border-b">
+                <CardTitle>Profile Information</CardTitle>
+                <CardDescription>Update your personal details visible to the system.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center gap-6">
+                  <Avatar className="h-20 w-20">
+                    <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
+                      {userName.substring(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="space-y-1">
+                    <Button variant="outline" size="sm" type="button">Change Avatar</Button>
+                    <p className="text-xs text-muted-foreground">JPG, GIF or PNG. 1MB max.</p>
+                  </div>
                 </div>
-              </div>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>First Name</Label>
-                  <Input defaultValue={userName.split(' ')[0] || ''} />
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Input id="firstName" name="firstName" defaultValue={userName.split(' ')[0] || ''} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName">Last Name</Label>
+                    <Input id="lastName" name="lastName" defaultValue={userName.split(' ').slice(1).join(' ') || ''} />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="email">Email Address</Label>
+                    <Input id="email" name="email" defaultValue={userEmail} type="email" />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Last Name</Label>
-                  <Input defaultValue={userName.split(' ').slice(1).join(' ') || ''} />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Email Address</Label>
-                  <Input defaultValue={userEmail} type="email" />
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="bg-secondary border-t">
-              <Button>Save Changes</Button>
-            </CardFooter>
-          </Card>
+              </CardContent>
+              <CardFooter className="bg-secondary border-t">
+                <Button type="submit">Save Changes</Button>
+              </CardFooter>
+            </Card>
+          </form>
         </TabsContent>
 
         <TabsContent value="billing" className="space-y-6">
