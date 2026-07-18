@@ -272,15 +272,45 @@ export async function saveResume(resume: Resume): Promise<{ id: string; error: s
     return { id: '', error: 'Unauthorized' };
   }
 
-  // Ensure profile record exists in public.profiles table to satisfy foreign key constraints
+  // Ensure profile record exists in public.profiles table to satisfy foreign key constraints.
+  // Uses the admin client (service role key) to bypass RLS — the anon client cannot write
+  // to profiles in production without an explicit INSERT policy.
   try {
-    await supabase.from('profiles').upsert({
-      id: user.id,
-      email: user.email || '',
-      full_name: user.user_metadata?.full_name || 'User'
-    });
-  } catch (profileErr) {
-    console.warn('[db-service] Profile auto-heal upsert failed:', profileErr);
+    if (isAdminConfigured()) {
+      const adminSupabase = await createAdminClient();
+      const { error: profileErr } = await adminSupabase.from('profiles').upsert({
+        id: user.id,
+        email: user.email || '',
+        full_name: user.user_metadata?.full_name || 'User'
+      }, { onConflict: 'id' });
+      if (profileErr) {
+        console.error('[saveResume] Profile upsert (admin) failed:', profileErr.code, profileErr.message);
+      }
+    } else {
+      // Fallback: SUPABASE_SERVICE_ROLE_KEY is not configured.
+      // This warning fires on EVERY request in this state — it is intentional.
+      // Add SUPABASE_SERVICE_ROLE_KEY to your Vercel environment variables to resolve this.
+      console.warn(
+        '[saveResume] WARNING: SUPABASE_SERVICE_ROLE_KEY is not configured.',
+        'Profile upsert is running with the anon client and may be blocked by RLS in production.',
+        'Set SUPABASE_SERVICE_ROLE_KEY in Vercel → Project → Settings → Environment Variables.'
+      );
+      const { error: profileErr } = await supabase.from('profiles').upsert({
+        id: user.id,
+        email: user.email || '',
+        full_name: user.user_metadata?.full_name || 'User'
+      }, { onConflict: 'id' });
+      if (profileErr) {
+        console.error(
+          '[saveResume] Profile upsert (anon) failed — SUPABASE_SERVICE_ROLE_KEY may be missing:',
+          profileErr.code, '|', profileErr.message,
+          '| details:', profileErr.details,
+          '| hint:', profileErr.hint
+        );
+      }
+    }
+  } catch (profileErr: unknown) {
+    console.warn('[saveResume] Profile upsert threw:', profileErr);
   }
 
   const isNew = !resume.id || resume.id === 'new' || resume.id.startsWith('ls_');
@@ -311,10 +341,19 @@ export async function saveResume(resume: Resume): Promise<{ id: string; error: s
       const { data, error } = await supabase.from('resumes').update(dbResume).eq('id', id).select('id').single();
       const duration = Date.now() - startTime;
       if (error) {
-        let userMessage = error.message;
-        if (error.code === '23503' || error.message.toLowerCase().includes('foreign key')) {
-          userMessage = 'Unable to create resume. Please refresh your profile or try logging in again.';
-        }
+        const isFkViolation = error.code === '23503' || error.message.toLowerCase().includes('foreign key');
+        const userMessage = isFkViolation
+          ? 'Unable to create your resume. Please try again.'
+          : error.message;
+        console.error(
+          '[saveResume] UPDATE failed',
+          '| code:', error.code,
+          '| message:', error.message,
+          '| details:', error.details,
+          '| hint:', error.hint,
+          '| resumeId:', id,
+          '| userId:', user.id
+        );
         Telemetry.recordLatency('resume.save', duration, 'failure', { error: error.message, userId: user.id, resumeId: id, traceId });
         Telemetry.recordCounter('resume.save', 1, 'failure', { error: error.message, userId: user.id, resumeId: id, traceId });
         return { id: '', error: userMessage };
@@ -326,10 +365,18 @@ export async function saveResume(resume: Resume): Promise<{ id: string; error: s
       const { data, error } = await supabase.from('resumes').insert(dbResume).select('id').single();
       const duration = Date.now() - startTime;
       if (error) {
-        let userMessage = error.message;
-        if (error.code === '23503' || error.message.toLowerCase().includes('foreign key')) {
-          userMessage = 'Unable to create resume. Please refresh your profile or try logging in again.';
-        }
+        const isFkViolation = error.code === '23503' || error.message.toLowerCase().includes('foreign key');
+        const userMessage = isFkViolation
+          ? 'Unable to create your resume. Please try again.'
+          : error.message;
+        console.error(
+          '[saveResume] INSERT failed',
+          '| code:', error.code,
+          '| message:', error.message,
+          '| details:', error.details,
+          '| hint:', error.hint,
+          '| userId:', user.id
+        );
         Telemetry.recordLatency('resume.save', duration, 'failure', { error: error.message, userId: user.id, traceId });
         Telemetry.recordCounter('resume.save', 1, 'failure', { error: error.message, userId: user.id, traceId });
         return { id: '', error: userMessage };
@@ -341,10 +388,11 @@ export async function saveResume(resume: Resume): Promise<{ id: string; error: s
   } catch (err: unknown) {
     const duration = Date.now() - startTime;
     const errMsg = err instanceof Error ? err.message : String(err);
-    let userMessage = errMsg;
-    if (errMsg.toLowerCase().includes('foreign key')) {
-      userMessage = 'Unable to create resume. Please refresh your profile or try logging in again.';
-    }
+    const isFkViolation = errMsg.toLowerCase().includes('foreign key');
+    const userMessage = isFkViolation
+      ? 'Unable to create your resume. Please try again.'
+      : 'Unable to save your resume. Please try again.';
+    console.error('[saveResume] Unhandled exception — userId:', user.id, '| error:', errMsg);
     Telemetry.recordLatency('resume.save', duration, 'failure', { error: errMsg, userId: user.id, traceId });
     Telemetry.recordCounter('resume.save', 1, 'failure', { error: errMsg, userId: user.id, traceId });
     return { id: '', error: userMessage };

@@ -312,6 +312,11 @@ export default function BuilderClient({
   // assigning a new ID (not a user edit), to prevent re-triggering a save.
   const justAssignedIdRef = useRef(false);
 
+  // Stores the JSON hash of the last successfully saved resume.
+  // Used to detect whether the data has actually changed before triggering
+  // a network save — this is the primary guard against the autosave loop.
+  const lastSavedHash = useRef<string>('');
+
   useEffect(() => {
     if (!initialLoadDone.current) return;
 
@@ -319,6 +324,14 @@ export default function BuilderClient({
     // after a successful auto-save (prevents save loop on new resumes).
     if (justAssignedIdRef.current) {
       justAssignedIdRef.current = false;
+      return;
+    }
+
+    // Hash-guard: skip network save when resume data has not changed.
+    // This prevents the autosave from re-firing after setSaveState / setResume
+    // calls that flow back from the server response.
+    const currentHash = JSON.stringify(resume);
+    if (currentHash === lastSavedHash.current) {
       return;
     }
 
@@ -353,6 +366,10 @@ export default function BuilderClient({
         const isDraftStatus = resume.isDraft !== false;
         const { id, error } = await performSave({ ...resume, isDraft: isDraftStatus });
         if (!error && id) {
+          // Record the hash BEFORE mutating resume state so the next
+          // effect run sees the match and exits early.
+          lastSavedHash.current = currentHash;
+
           const isNewResume = !resume.id || resume.id === 'new';
           if (isNewResume) {
             // Mark that the next resume state change is from ID assignment, not a user edit
