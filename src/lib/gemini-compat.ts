@@ -1,4 +1,24 @@
-export class GeminiOpenAiWrapper {
+export interface ChatCompletionParams {
+  model: string;
+  messages: Array<{ role: string; content: string }>;
+  temperature?: number;
+  response_format?: { type: string };
+}
+
+export interface ChatCompletionResponse {
+  choices: Array<{ message: { content: string | null } }>;
+}
+
+/** Minimal interface shared by both OpenAI SDK and GeminiOpenAiWrapper. */
+export interface OpenAICompatClient {
+  chat: {
+    completions: {
+      create(params: ChatCompletionParams): Promise<ChatCompletionResponse>;
+    };
+  };
+}
+
+export class GeminiOpenAiWrapper implements OpenAICompatClient {
   private apiKey: string;
 
   constructor(apiKey: string) {
@@ -32,7 +52,7 @@ export class GeminiOpenAiWrapper {
             modelName = 'gemini-3.5-flash';
           }
 
-          const generationConfig: any = {};
+          const generationConfig: { temperature?: number; responseMimeType?: string } = {};
           if (params.temperature !== undefined) {
             generationConfig.temperature = params.temperature;
           }

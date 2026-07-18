@@ -5,7 +5,7 @@ import mammoth from 'mammoth';
 import { OpenAI } from 'openai';
 import { emptyResume } from '@/lib/mock-data';
 import { checkAndIncrementAiUsage, getUserSubscription } from '@/lib/db-service';
-import { GeminiOpenAiWrapper } from '@/lib/gemini-compat';
+import { GeminiOpenAiWrapper, OpenAICompatClient } from '@/lib/gemini-compat';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -85,9 +85,9 @@ export async function POST(req: Request) {
       });
     }
 
-    const openai = openaiKey 
+    const openai: OpenAI | OpenAICompatClient = openaiKey 
       ? new OpenAI({ apiKey: openaiKey })
-      : new GeminiOpenAiWrapper(geminiKey) as any;
+      : new GeminiOpenAiWrapper(geminiKey);
 
     const aiModel = openaiKey ? 'gpt-4o-mini' : 'gemini-3.5-flash';
 

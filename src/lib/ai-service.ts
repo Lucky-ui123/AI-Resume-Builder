@@ -1,9 +1,9 @@
 import OpenAI from 'openai';
 import { Resume } from '@/types';
-import { GeminiOpenAiWrapper } from './gemini-compat';
+import { GeminiOpenAiWrapper, OpenAICompatClient } from './gemini-compat';
 
 // Initialize OpenAI/Gemini conditionally
-const getAiClientAndModel = () => {
+const getAiClientAndModel = (): { client: OpenAI | OpenAICompatClient | null; model: string } => {
   const openAiKey = process.env.OPENAI_API_KEY;
   if (openAiKey) {
     return {
@@ -15,7 +15,7 @@ const getAiClientAndModel = () => {
   const geminiKey = process.env.GEMINI_API_KEY;
   if (geminiKey) {
     return {
-      client: new GeminiOpenAiWrapper(geminiKey) as any,
+      client: new GeminiOpenAiWrapper(geminiKey),
       model: 'gemini-3.5-flash'
     };
   }
