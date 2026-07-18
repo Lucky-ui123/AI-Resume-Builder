@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getResume } from '@/lib/db-service';
 import { generateLinkedInHeadline, generateLinkedInAbout } from '@/lib/ai-service';
+import { handleAiRouteError } from '@/lib/api-errors';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { resume, type } = body;
+    const { resume, type, bypassCache, regenerate } = body;
     
     // Validate auth and ownership if Supabase is configured
     const isSupabaseConfigured = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -18,22 +19,15 @@ export async function POST(req: Request) {
 
     let result = '';
     if (type === 'headline') {
-      result = await generateLinkedInHeadline(resume);
+      result = await generateLinkedInHeadline(resume, bypassCache || regenerate);
     } else if (type === 'about') {
-      result = await generateLinkedInAbout(resume);
+      result = await generateLinkedInAbout(resume, bypassCache || regenerate);
     } else {
       return NextResponse.json({ error: 'Invalid type. Use "headline" or "about".' }, { status: 400 });
     }
 
     return NextResponse.json({ result });
   } catch (error: unknown) {
-    if ((error as Error)?.message === 'OPENAI_KEY_MISSING') {
-      return NextResponse.json({ error: 'AI features require an OpenAI API key. Please configure your environment variables.' }, { status: 503 });
-    }
-    if ((error as Error)?.message === 'AI_LIMIT_REACHED') {
-      return NextResponse.json({ error: 'AI limit reached. Please upgrade to continue.' }, { status: 403 });
-    }
-    console.error('AI Error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return handleAiRouteError(error);
   }
 }

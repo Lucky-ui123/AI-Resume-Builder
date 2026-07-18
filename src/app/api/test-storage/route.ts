@@ -124,7 +124,7 @@ export async function GET() {
     }
 
     // Verify all 10 exist
-    let { data: versionsList, error: listErr } = await adminSupabase
+    const { data: versionsList, error: listErr } = await adminSupabase
       .from('resume_versions')
       .select('id, name')
       .eq('resume_id', testResumeId)
@@ -152,7 +152,7 @@ export async function GET() {
     }
 
     // Verify oldest version was deleted
-    let { data: versionsListAfter, error: listAfterErr } = await adminSupabase
+    const { data: versionsListAfter, error: listAfterErr } = await adminSupabase
       .from('resume_versions')
       .select('id')
       .eq('resume_id', testResumeId);
@@ -213,9 +213,10 @@ export async function GET() {
       mode: 'database',
       message: 'All integration database tests passed successfully.'
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
     console.error('[Test Storage] Test failure:', err);
-    return NextResponse.json({ success: false, error: err.message || String(err) }, { status: 500 });
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   } finally {
     if (testUserId) {
       console.log(`[Test Storage] Cleaning up test user ${testUserId} and related records...`);

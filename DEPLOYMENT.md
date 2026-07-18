@@ -5,7 +5,7 @@ This guide details the process for deploying HireCraft AI to Vercel.
 ## Pre-requisites
 1. A Vercel account linked to your GitHub account.
 2. A Supabase project set up.
-3. An OpenAI API key.
+3. A Google Gemini API key (obtain from [Google AI Studio](https://aistudio.google.com/apikey)).
 
 ## 1. Initial Vercel Setup
 1. Log into your Vercel Dashboard.

@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { ResumeBuilderService } from '@/lib/ai-career-services';
 import { getUserSubscription } from '@/lib/db-service';
+import { handleAiRouteError } from '@/lib/api-errors';
 
 export async function POST(request: Request) {
   try {
-    const { prompt } = await request.json();
+    const { prompt, bypassCache, regenerate } = await request.json();
 
     if (!prompt) {
       return NextResponse.json(
@@ -13,8 +14,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await ResumeBuilderService.generateResume(prompt);
-
+    const result = await ResumeBuilderService.generateResume(prompt, bypassCache || regenerate);
     // Override personalInfo name and email with logged in user details if available
     try {
       const { userName, userEmail } = await getUserSubscription();
@@ -37,16 +37,12 @@ export async function POST(request: Request) {
       }
 
       result.personalInfo = currentPersonalInfo;
-    } catch (e) {
+    } catch {
       // ignore
     }
 
     return NextResponse.json({ result });
   } catch (error) {
-    console.error('AI Generate Resume Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to generate resume' },
-      { status: 500 }
-    );
+    return handleAiRouteError(error);
   }
 }

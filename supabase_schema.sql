@@ -80,6 +80,30 @@ CREATE TRIGGER on_profile_created
     FOR EACH ROW
     EXECUTE FUNCTION handle_new_profile_subscription();
 
+-- Trigger to auto-create profile on auth.users insert
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.profiles (id, email, full_name, avatar_url)
+    VALUES (
+        NEW.id,
+        NEW.email,
+        COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
+        COALESCE(NEW.raw_user_meta_data->>'avatar_url', '')
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        full_name = COALESCE(EXCLUDED.full_name, public.profiles.full_name),
+        avatar_url = COALESCE(EXCLUDED.avatar_url, public.profiles.avatar_url);
+    RETURN NEW;
+END;
+$$ language 'plpgsql' SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW
+    EXECUTE FUNCTION handle_new_user();
+
 -- Create resumes table
 CREATE TABLE IF NOT EXISTS public.resumes (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

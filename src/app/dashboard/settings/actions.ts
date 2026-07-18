@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
-export async function updateProfileAction(formData: FormData) {
+export async function updateProfileAction(formData: FormData): Promise<void> {
   const firstName = formData.get('firstName') as string;
   const lastName = formData.get('lastName') as string;
   const email = formData.get('email') as string;
@@ -18,7 +18,7 @@ export async function updateProfileAction(formData: FormData) {
     cookieStore.set('mock_user_email', email || 'demo@example.com', { path: '/' });
     revalidatePath('/dashboard/settings');
     revalidatePath('/dashboard', 'layout');
-    return { success: true };
+    return;
   }
 
   const supabase = await createClient();
@@ -30,10 +30,10 @@ export async function updateProfileAction(formData: FormData) {
   });
 
   if (error) {
-    return { error: error.message };
+    console.error('Update profile error:', error.message);
+    throw new Error(error.message);
   }
 
   revalidatePath('/dashboard/settings');
   revalidatePath('/dashboard', 'layout');
-  return { success: true };
 }

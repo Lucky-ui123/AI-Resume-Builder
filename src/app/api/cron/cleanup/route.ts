@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { Telemetry } from '@/lib/telemetry';
 import { SUBSCRIPTION_PLANS, PlanType } from '@/lib/subscription-config';
+import { cleanOldAiCache } from '@/lib/db-service';
 
 export async function GET(request: Request) {
   const traceId = crypto.randomUUID();
@@ -33,6 +34,14 @@ export async function GET(request: Request) {
   };
 
   try {
+    // 0. Clean up old AI response cache entries (older than 30 days)
+    console.log(`[Cron Cleanup] [Trace: ${traceId}] Cleaning old AI response cache...`);
+    try {
+      await cleanOldAiCache();
+    } catch (cacheErr) {
+      console.error(`[Cron Cleanup] [Trace: ${traceId}] Failed to run cleanOldAiCache:`, cacheErr);
+    }
+
     // 1. Cleanup expired temp/mock resumes
     console.log(`[Cron Cleanup] [Trace: ${traceId}] Checking for expired mock resumes...`);
     const { data: expiredData, error: expiredError } = await adminSupabase
@@ -64,7 +73,7 @@ export async function GET(request: Request) {
         results.softDeletedResumes = Array.isArray(softData) ? softData.length : 0;
         console.log(`[Cron Cleanup] [Trace: ${traceId}] Successfully deleted ${results.softDeletedResumes} soft-deleted resumes.`);
       }
-    } catch (e) {
+    } catch {
       // Ignore column does not exist errors
     }
 

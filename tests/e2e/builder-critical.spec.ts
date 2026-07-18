@@ -64,7 +64,6 @@ test.describe('Builder Critical Flows', () => {
     await waitForAutoSave();
 
     // 2. Go back to resumes list
-    const resumesPage = new ResumesPage(page);
     await resumesPage.goto();
     
     // Wait for hydration

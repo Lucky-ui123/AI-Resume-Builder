@@ -14,11 +14,11 @@ HireCraft AI is an intelligent resume builder and job matching platform that lev
 - React
 - Tailwind CSS
 - Supabase (Auth & Database)
-- OpenAI API (GPT-4o-mini)
+- Google Gemini API (gemini-2.0-flash)
 
 ## Setup & Deployment
 
-1. **Environment Variables**: Copy `.env.example` to `.env` and fill in your Supabase and OpenAI keys. See `ENVIRONMENT.md` for details.
+1. **Environment Variables**: Copy `.env.example` to `.env.local` and fill in your Supabase and Gemini API keys. See `ENVIRONMENT.md` for details.
 2. **Local Development**: Run `npm install` then `npm run dev`.
 3. **Deployment**: This project is optimized for deployment on Vercel. See `DEPLOYMENT.md` for detailed deployment instructions.
 

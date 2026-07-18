@@ -13,7 +13,7 @@ This document explains the environment variables required to run HireCraft AI lo
 **NEVER expose these to the browser (`NEXT_PUBLIC_`) and NEVER commit them to Git.**
 
 - `SUPABASE_SERVICE_ROLE_KEY`: The service role key for Supabase. Used strictly in secure server environments (API routes, server actions) to bypass RLS for administrative actions (e.g., creating users, incrementing AI usage).
-- `OPENAI_API_KEY`: Your OpenAI API key. Used by server API routes for generating AI suggestions, ATS reports, and parsing resumes.
+- `GEMINI_API_KEY`: Your Google Gemini API key. Used by all server-side AI routes for generating resume content, ATS reports, cover letters, and parsing resumes. Obtain it from [Google AI Studio](https://aistudio.google.com/apikey).
 
 ## Managing Variables in Vercel
 1. Go to your Project Dashboard -> **Settings** -> **Environment Variables**.

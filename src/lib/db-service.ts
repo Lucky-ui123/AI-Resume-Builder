@@ -42,7 +42,7 @@ export async function getUserSubscription() {
       const cookieStore = await cookies();
       userName = cookieStore.get('mock_user_name')?.value || 'User';
       userEmail = cookieStore.get('mock_user_email')?.value || 'demo@example.com';
-    } catch (e) {
+    } catch {
       // ignore
     }
     const limits = SUBSCRIPTION_PLANS[mockSubscription.plan];
@@ -84,6 +84,14 @@ export async function getUserSubscription() {
     }
 
     const adminSupabase = await createAdminClient();
+    
+    // Ensure profile record exists first to satisfy foreign key constraints
+    await adminSupabase.from('profiles').upsert({
+      id: user.id,
+      email: user.email || '',
+      full_name: user.user_metadata?.full_name || 'User'
+    });
+
     const { data: newData, error: newError } = await adminSupabase
       .from('user_subscriptions')
       .insert({ user_id: user.id })
@@ -264,6 +272,17 @@ export async function saveResume(resume: Resume): Promise<{ id: string; error: s
     return { id: '', error: 'Unauthorized' };
   }
 
+  // Ensure profile record exists in public.profiles table to satisfy foreign key constraints
+  try {
+    await supabase.from('profiles').upsert({
+      id: user.id,
+      email: user.email || '',
+      full_name: user.user_metadata?.full_name || 'User'
+    });
+  } catch (profileErr) {
+    console.warn('[db-service] Profile auto-heal upsert failed:', profileErr);
+  }
+
   const isNew = !resume.id || resume.id === 'new' || resume.id.startsWith('ls_');
   if (isNew) {
     const sub = await getUserSubscription();
@@ -292,9 +311,13 @@ export async function saveResume(resume: Resume): Promise<{ id: string; error: s
       const { data, error } = await supabase.from('resumes').update(dbResume).eq('id', id).select('id').single();
       const duration = Date.now() - startTime;
       if (error) {
+        let userMessage = error.message;
+        if (error.code === '23503' || error.message.toLowerCase().includes('foreign key')) {
+          userMessage = 'Unable to create resume. Please refresh your profile or try logging in again.';
+        }
         Telemetry.recordLatency('resume.save', duration, 'failure', { error: error.message, userId: user.id, resumeId: id, traceId });
         Telemetry.recordCounter('resume.save', 1, 'failure', { error: error.message, userId: user.id, resumeId: id, traceId });
-        return { id: '', error: error.message };
+        return { id: '', error: userMessage };
       }
       Telemetry.recordLatency('resume.save', duration, 'success', { userId: user.id, resumeId: data.id, traceId });
       Telemetry.recordCounter('resume.save', 1, 'success', { userId: user.id, resumeId: data.id, traceId });
@@ -303,9 +326,13 @@ export async function saveResume(resume: Resume): Promise<{ id: string; error: s
       const { data, error } = await supabase.from('resumes').insert(dbResume).select('id').single();
       const duration = Date.now() - startTime;
       if (error) {
+        let userMessage = error.message;
+        if (error.code === '23503' || error.message.toLowerCase().includes('foreign key')) {
+          userMessage = 'Unable to create resume. Please refresh your profile or try logging in again.';
+        }
         Telemetry.recordLatency('resume.save', duration, 'failure', { error: error.message, userId: user.id, traceId });
         Telemetry.recordCounter('resume.save', 1, 'failure', { error: error.message, userId: user.id, traceId });
-        return { id: '', error: error.message };
+        return { id: '', error: userMessage };
       }
       Telemetry.recordLatency('resume.save', duration, 'success', { userId: user.id, resumeId: data.id, traceId });
       Telemetry.recordCounter('resume.save', 1, 'success', { userId: user.id, resumeId: data.id, traceId });
@@ -314,9 +341,13 @@ export async function saveResume(resume: Resume): Promise<{ id: string; error: s
   } catch (err: unknown) {
     const duration = Date.now() - startTime;
     const errMsg = err instanceof Error ? err.message : String(err);
+    let userMessage = errMsg;
+    if (errMsg.toLowerCase().includes('foreign key')) {
+      userMessage = 'Unable to create resume. Please refresh your profile or try logging in again.';
+    }
     Telemetry.recordLatency('resume.save', duration, 'failure', { error: errMsg, userId: user.id, traceId });
     Telemetry.recordCounter('resume.save', 1, 'failure', { error: errMsg, userId: user.id, traceId });
-    return { id: '', error: errMsg };
+    return { id: '', error: userMessage };
   }
 }
 
@@ -346,17 +377,18 @@ export async function saveResumeVersion(resumeId: string, name: string, resumeCo
     return { error: null };
   }
 
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const userId = user?.id || 'unknown';
+
   const sub = await getUserSubscription();
   const limit = sub.limits.versionLimit;
-  const userId = sub.userId || 'unknown';
 
   if (limit <= 0) {
     console.warn(`[Version History] [Trace: ${traceId}] User ${userId} blocked from saving version for resume ${resumeId}. Plan "${sub.plan}" limit is 0.`);
     Telemetry.recordCounter('resume_version.save', 1, 'warning', { reason: 'Plan limit zero', userId, resumeId, traceId });
     return { error: 'Your current subscription plan does not support version history. Please upgrade your plan.' };
   }
-
-  const supabase = await createClient();
 
   // Try calling the RPC first
   try {
@@ -810,11 +842,159 @@ export async function saveSuggestions(resumeId: string, suggestions: ResumeSugge
   });
   return { error: error ? error.message : null };
 }
-
 export async function getSuggestions(resumeId: string) {
   if (!isSupabaseConfigured()) return [];
   const supabase = await createClient();
   const { data, error } = await supabase.from('resume_suggestions').select('suggestions').eq('resume_id', resumeId).single();
   if (error || !data) return [];
   return data.suggestions || [];
+}
+
+// ---------------------------------------------------------------------------
+// AI Response Cache Operations
+// ---------------------------------------------------------------------------
+const inMemoryCache = new Map<string, string>();
+
+export async function getCachedResponse(taskType: string, inputHash: string): Promise<string | null> {
+  const isConfigured = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  let rawContent: string | null = null;
+
+  if (!isConfigured) {
+    rawContent = inMemoryCache.get(`${taskType}:${inputHash}`) || null;
+  } else {
+    try {
+      const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY ? await createAdminClient() : await createClient();
+      const { data, error } = await supabase
+        .from('ai_response_cache')
+        .select('response_content')
+        .eq('task_type', taskType)
+        .eq('input_hash', inputHash)
+        .maybeSingle();
+
+      if (!error && data) {
+        rawContent = data.response_content;
+      }
+    } catch (err) {
+      console.warn('[cache] Failed to fetch cached response:', err);
+      return null;
+    }
+  }
+
+  if (!rawContent) return null;
+
+  // Attempt to parse the new structure
+  try {
+    const parsed = JSON.parse(rawContent);
+    if (parsed && typeof parsed === 'object' && 'response' in parsed) {
+      return parsed.response;
+    }
+  } catch {
+    // Return legacy content as-is
+  }
+  return rawContent;
+}
+
+export async function saveCachedResponse(
+  taskType: string,
+  inputHash: string,
+  content: string,
+  provider: 'gemini' | 'groq' = 'gemini',
+  model: string = 'unknown'
+): Promise<void> {
+  const isConfigured = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  const cachePayload: {
+    provider: 'gemini' | 'groq';
+    model: string;
+    response: string;
+    createdAt: string;
+    fallback?: boolean;
+  } = {
+    provider,
+    model,
+    response: content,
+    createdAt: new Date().toISOString()
+  };
+
+  if (provider === 'groq') {
+    cachePayload.fallback = true;
+  } else {
+    cachePayload.fallback = false;
+  }
+
+  const serialized = JSON.stringify(cachePayload);
+
+  if (!isConfigured) {
+    inMemoryCache.set(`${taskType}:${inputHash}`, serialized);
+    return;
+  }
+
+  try {
+    const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY ? await createAdminClient() : await createClient();
+    await supabase
+      .from('ai_response_cache')
+      .upsert({
+        task_type: taskType,
+        input_hash: inputHash,
+        response_content: serialized
+      }, { onConflict: 'task_type,input_hash' });
+  } catch (err) {
+    console.warn('[cache] Failed to save cached response:', err);
+  }
+}
+
+export async function cleanOldAiCache(): Promise<void> {
+  const isConfigured = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!isConfigured) {
+    return;
+  }
+
+  try {
+    const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY ? await createAdminClient() : await createClient();
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 30);
+
+    const { error } = await supabase
+      .from('ai_response_cache')
+      .delete()
+      .lt('created_at', cutoffDate.toISOString());
+
+    if (error) {
+      console.warn('[cache] Failed to clean old cache entries:', error.message);
+    } else {
+      console.log('[cache] Cleaned AI response cache entries older than 30 days.');
+    }
+  } catch (err) {
+    console.warn('[cache] Exception occurred during cache cleanup:', err);
+  }
+}
+
+export async function saveAiProviderLog(log: {
+  provider: 'gemini' | 'groq';
+  model: string;
+  success: boolean;
+  latency_ms: number;
+  fallback_used: boolean;
+  error_type?: string | null;
+  request_type?: string | null;
+}): Promise<void> {
+  const isConfigured = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!isConfigured) {
+    return;
+  }
+
+  try {
+    const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY ? await createAdminClient() : await createClient();
+    await supabase.from('ai_provider_logs').insert({
+      provider: log.provider,
+      model: log.model,
+      success: log.success,
+      latency_ms: log.latency_ms,
+      fallback_used: log.fallback_used,
+      error_type: log.error_type || null,
+      request_type: log.request_type || null
+    });
+  } catch (err) {
+    console.warn('[telemetry] Failed to save AI provider log:', err);
+  }
 }

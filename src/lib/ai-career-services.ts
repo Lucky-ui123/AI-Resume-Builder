@@ -1,32 +1,12 @@
-import OpenAI from 'openai';
+import crypto from 'crypto';
 import { Resume, MatchReport, AtsReport, ResumeScores, ResumeSuggestion } from '@/types';
-import { GeminiOpenAiWrapper, OpenAICompatClient } from './gemini-compat';
-
-const getAiClientAndModel = (): { client: OpenAI | OpenAICompatClient | null; model: string } => {
-  const openAiKey = process.env.OPENAI_API_KEY;
-  if (openAiKey) {
-    return {
-      client: new OpenAI({ apiKey: openAiKey }),
-      model: 'gpt-4o-mini'
-    };
-  }
-
-  const geminiKey = process.env.GEMINI_API_KEY;
-  if (geminiKey) {
-    return {
-      client: new GeminiOpenAiWrapper(geminiKey),
-      model: 'gemini-3.5-flash'
-    };
-  }
-
-  return { client: null, model: '' };
-};
-
-const { client: openai, model: aiModel } = getAiClientAndModel();
-
-const shouldUseMock = () => {
-  return !openai;
-};
+import { MODEL_PRO, MODEL_FLASH } from './gemini-client';
+import { getAIClient } from './ai/provider-manager';
+import { LocalHeuristicAnalyzer } from './local-heuristic-analyzer';
+import { getCachedResponse, saveCachedResponse } from './db-service';
+import { ATS_ANALYSIS_SYSTEM, ATS_MATCH_SCHEMA_PROMPT, ATS_REPORT_SCHEMA_PROMPT } from './prompts/ats-analysis';
+import { COVER_LETTER_SYSTEM, COVER_LETTER_REWRITE_SYSTEM } from './prompts/cover-letter';
+import { RESUME_GENERATION_SYSTEM } from './prompts/resume-generation';
 
 async function trackAiUsage() {
   if (typeof window === 'undefined') {
@@ -35,100 +15,122 @@ async function trackAiUsage() {
   }
 }
 
+// Helper to compute sha256 hash of inputs
+function computeHash(input: unknown): string {
+  const str = typeof input === 'string' ? input : JSON.stringify(input);
+  return crypto.createHash('sha256').update(str).digest('hex');
+}
+
+// Convert user resume data into compact structured payload to save input tokens
+function getCompactResumeForAI(resume: Resume) {
+  return {
+    role: resume.targetRole || '',
+    summary: resume.summary || '',
+    skills: resume.skills?.map(s => s.name) ?? [],
+    experience: resume.experience?.map(e => ({
+      company: e.company || '',
+      role: e.role || '',
+      description: e.description || ''
+    })) ?? [],
+    education: resume.education?.map(edu => ({
+      institution: edu.institution || '',
+      degree: edu.degree || '',
+      fieldOfStudy: edu.fieldOfStudy || ''
+    })) ?? []
+  };
+}
+
+// Pre-process and extract keywords for ATS analysis to avoid sending whole resume text
+function extractAtsPayload(resume: Resume, jobDescription: string) {
+  const skills = resume.skills?.map(s => s.name) ?? [];
+  const experienceText = resume.experience?.map(e => `${e.role} ${e.company} ${e.description}`).join(' ') ?? '';
+  
+  const experienceKeywords = Array.from(new Set(
+    experienceText.toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 4 && !['about', 'their', 'there', 'would', 'could', 'should', 'using', 'through', 'under'].includes(w))
+  )).slice(0, 30);
+
+  const jobKeywords = Array.from(new Set(
+    jobDescription.toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 4 && !['about', 'their', 'there', 'would', 'could', 'should', 'using', 'through', 'under'].includes(w))
+  )).slice(0, 30);
+
+  return {
+    skills,
+    experience_keywords: experienceKeywords,
+    job_keywords: jobKeywords
+  };
+}
+
 // ---------------------------------------------------------------------------
 // 1. Job Matcher Service
 // ---------------------------------------------------------------------------
 export class JobMatcherService {
-  static async analyzeMatch(resume: Resume, jobDescription: string): Promise<Omit<MatchReport, 'id' | 'created_at'>> {
-    await trackAiUsage();
-    const resumeText = JSON.stringify({
-      title: resume.title,
-      targetRole: resume.targetRole,
-      summary: resume.summary,
-      skills: resume.skills?.map(s => s.name) || [],
-      experience: resume.experience || [],
-      education: resume.education || []
-    });
+  static async analyzeMatch(
+    resume: Resume,
+    jobDescription: string,
+    bypassCache = false
+  ): Promise<Omit<MatchReport, 'id' | 'created_at'>> {
+    const atsPayload = extractAtsPayload(resume, jobDescription);
+    const inputHash = computeHash({ atsPayload, jobDescription });
+    const taskType = 'analyze-match';
 
-    if (shouldUseMock()) {
-      await new Promise(r => setTimeout(r, 2000));
-      // Extract mock skills/keywords
-      const jobLower = jobDescription.toLowerCase();
-      const possibleKeywords = ['react', 'next.js', 'typescript', 'tailwind', 'graphql', 'node', 'sql', 'agile', 'aws', 'ci/cd'];
-      const matched = possibleKeywords.filter(k => jobLower.includes(k) && JSON.stringify(resume).toLowerCase().includes(k));
-      const missing = possibleKeywords.filter(k => jobLower.includes(k) && !JSON.stringify(resume).toLowerCase().includes(k));
-      
-      const score = Math.max(45, Math.min(95, 50 + matched.length * 8));
-
-      return {
-        resumeId: resume.id,
-        resumeTitle: resume.title,
-        jobTitle: resume.targetRole || 'Software Engineer',
-        companyName: 'Target Company',
-        jobDescription,
-        matchScore: score,
-        skillsMatch: { matched, missing },
-        keywords: { matched, missing },
-        experienceMatch: 'Matches 3 out of 5 core experience requirements specified in the description.',
-        educationMatch: 'Education qualifications match the minimum requirement.',
-        strengths: [
-          'Excellent technical alignment with core front-end languages.',
-          'Solid project history reflecting production scale deployments.'
-        ],
-        weaknesses: [
-          'Missing back-end database orchestration experience.',
-          'No mention of cloud provider services (e.g. AWS, GCP).'
-        ],
-        recommendations: [
-          'Integrate node/database tools into the skills list.',
-          'Explicitly highlight any minor AWS services used in past projects.'
-        ]
-      };
+    if (!bypassCache) {
+      const cached = await getCachedResponse(taskType, inputHash);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        return {
+          resumeId: resume.id,
+          resumeTitle: resume.title,
+          jobDescription,
+          ...parsed
+        };
+      }
     }
 
-    const response = await openai!.chat.completions.create({
-      model: aiModel,
+    await trackAiUsage();
+
+    const ai = getAIClient();
+    const response = await ai.chat.completions.create({
+      model: MODEL_FLASH, // matching logic is standard task, uses lower-cost Flash model
       response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
-          content: `You are an expert recruitment ATS and Job Match Analyzer. Compare the resume against the job description. Output a strict JSON structure matching:
-          {
-            "jobTitle": "string",
-            "companyName": "string",
-            "matchScore": number (0-100),
-            "skillsMatch": { "matched": string[], "missing": string[] },
-            "keywords": { "matched": string[], "missing": string[] },
-            "experienceMatch": "string summary",
-            "educationMatch": "string summary",
-            "strengths": string[],
-            "weaknesses": string[],
-            "recommendations": string[]
-          }`
+          content: `${ATS_ANALYSIS_SYSTEM}\n${ATS_MATCH_SCHEMA_PROMPT}`,
         },
         {
           role: 'user',
-          content: `Resume details:\n${resumeText}\n\nJob Description:\n${jobDescription}`
-        }
+          content: `ATS Extracted Keywords:\n${JSON.stringify(atsPayload)}\n\nJob Description:\n${jobDescription}`,
+        },
       ],
-      temperature: 0.3
+      temperature: 0.3,
+      maxOutputTokens: 1000,
+      requestType: 'ats_match',
     });
 
-    const parsed = JSON.parse(response.choices[0].message.content || '{}');
+    const contentText = response.content || '{}';
+    await saveCachedResponse(taskType, inputHash, contentText, response.provider, response.model);
+    const parsed = JSON.parse(contentText);
+
     return {
       resumeId: resume.id,
       resumeTitle: resume.title,
       jobDescription,
-      jobTitle: parsed.jobTitle || 'Target Role',
-      companyName: parsed.companyName || 'Target Company',
-      matchScore: parsed.matchScore || 50,
-      skillsMatch: parsed.skillsMatch || { matched: [], missing: [] },
-      keywords: parsed.keywords || { matched: [], missing: [] },
-      experienceMatch: parsed.experienceMatch || '',
-      educationMatch: parsed.educationMatch || '',
-      strengths: parsed.strengths || [],
-      weaknesses: parsed.weaknesses || [],
-      recommendations: parsed.recommendations || []
+      jobTitle: parsed.jobTitle ?? 'Target Role',
+      companyName: parsed.companyName ?? 'Target Company',
+      matchScore: parsed.matchScore ?? 50,
+      skillsMatch: parsed.skillsMatch ?? { matched: [], missing: [] },
+      keywords: parsed.keywords ?? { matched: [], missing: [] },
+      experienceMatch: parsed.experienceMatch ?? '',
+      educationMatch: parsed.educationMatch ?? '',
+      strengths: parsed.strengths ?? [],
+      weaknesses: parsed.weaknesses ?? [],
+      recommendations: parsed.recommendations ?? [],
     };
   }
 }
@@ -137,71 +139,57 @@ export class JobMatcherService {
 // 2. ATS Analyzer Service
 // ---------------------------------------------------------------------------
 export class ATSService {
-  static async analyzeResume(resume: Resume): Promise<Omit<AtsReport, 'id' | 'created_at'>> {
-    await trackAiUsage();
-    
-    if (shouldUseMock()) {
-      await new Promise(r => setTimeout(r, 2000));
-      return {
-        resumeId: resume.id,
-        resumeTitle: resume.title,
-        overallScore: 82,
-        contactInfoScore: 90,
-        structureScore: 85,
-        keywordScore: 75,
-        readabilityScore: 88,
-        formattingScore: 80,
-        completenessScore: 95,
-        missingKeywords: ['CI/CD', 'Docker', 'Kubernetes'],
-        suggestions: [
-          { id: '1', priority: 'High', message: 'Include quantifiable results (e.g. percentages, values) in experience bullet points.', section: 'Work Experience' },
-          { id: '2', priority: 'Medium', message: 'Avoid graphics or complex multi-column grids that impede parser scanning.', section: 'Formatting' },
-          { id: '3', priority: 'Low', message: 'Include missing cloud deployment keywords.', section: 'Keywords' }
-        ]
-      };
+  static async analyzeResume(resume: Resume, bypassCache = false): Promise<Omit<AtsReport, 'id' | 'created_at'>> {
+    const compactResume = getCompactResumeForAI(resume);
+    const inputHash = computeHash(compactResume);
+    const taskType = 'analyze-ats';
+
+    if (!bypassCache) {
+      const cached = await getCachedResponse(taskType, inputHash);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        return {
+          resumeId: resume.id,
+          resumeTitle: resume.title,
+          ...parsed
+        };
+      }
     }
 
-    const resumeText = JSON.stringify(resume);
-    const response = await openai!.chat.completions.create({
-      model: aiModel,
+    await trackAiUsage();
+
+    const ai = getAIClient();
+    const response = await ai.chat.completions.create({
+      model: MODEL_FLASH, // ATS scoring is standard task, uses lower-cost Flash model
       response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
-          content: `You are an expert ATS (Applicant Tracking System) parser and optimizer. Grade the resume. Output strict JSON:
-          {
-            "overallScore": number (0-100),
-            "contactInfoScore": number,
-            "structureScore": number,
-            "keywordScore": number,
-            "readabilityScore": number,
-            "formattingScore": number,
-            "completenessScore": number,
-            "missingKeywords": string[],
-            "suggestions": [{ "id": "string", "priority": "High"|"Medium"|"Low", "message": "string", "section": "string" }]
-          }`
+          content: `${ATS_ANALYSIS_SYSTEM}\n${ATS_REPORT_SCHEMA_PROMPT}`,
         },
-        {
-          role: 'user',
-          content: `Resume Content JSON:\n${resumeText}`
-        }
+        { role: 'user', content: `Resume Content:\n${JSON.stringify(compactResume)}` },
       ],
-      temperature: 0.2
+      temperature: 0.2,
+      maxOutputTokens: 1000,
+      requestType: 'ats_report',
     });
 
-    const parsed = JSON.parse(response.choices[0].message.content || '{}');
+    const contentText = response.content || '{}';
+    await saveCachedResponse(taskType, inputHash, contentText, response.provider, response.model);
+    const parsed = JSON.parse(contentText);
+
     return {
       resumeId: resume.id,
       resumeTitle: resume.title,
-      overallScore: parsed.overallScore || 70,
-      contactInfoScore: parsed.contactInfoScore || 70,
-      structureScore: parsed.structureScore || 70,
-      keywordScore: parsed.keywordScore || 70,
-      readabilityScore: parsed.readabilityScore || 70,
-      formattingScore: parsed.formattingScore || 70,
-      completenessScore: parsed.completenessScore || 70,
-      missingKeywords: parsed.missingKeywords || [],
-      suggestions: parsed.suggestions || []
+      overallScore: parsed.overallScore ?? 70,
+      contactInfoScore: parsed.contactInfoScore ?? 70,
+      structureScore: parsed.structureScore ?? 70,
+      keywordScore: parsed.keywordScore ?? 70,
+      readabilityScore: parsed.readabilityScore ?? 70,
+      formattingScore: parsed.formattingScore ?? 70,
+      completenessScore: parsed.completenessScore ?? 70,
+      missingKeywords: parsed.missingKeywords ?? [],
+      suggestions: parsed.suggestions ?? [],
     };
   }
 }
@@ -209,18 +197,23 @@ export class ATSService {
 // ---------------------------------------------------------------------------
 // 3. AI Suggestions Service
 // ---------------------------------------------------------------------------
-import { LocalHeuristicAnalyzer } from './local-heuristic-analyzer';
-
 export class ResumeSuggestionService {
-  static async generateSuggestions(resume: Resume, jobDescription?: string): Promise<{ scores: ResumeScores, suggestions: ResumeSuggestion[] }> {
-    await trackAiUsage();
+  static async generateSuggestions(
+    resume: Resume,
+    jobDescription?: string,
+    bypassCache = false
+  ): Promise<{ scores: ResumeScores; suggestions: ResumeSuggestion[] }> {
+    const compactResume = getCompactResumeForAI(resume);
+    const inputHash = computeHash({ compactResume, jobDescription });
+    const taskType = 'generate-suggestions';
 
-    if (shouldUseMock() || !openai) {
-      await new Promise(r => setTimeout(r, 600)); // debounce simulation
-      return LocalHeuristicAnalyzer.analyze(resume);
+    if (!bypassCache) {
+      const cached = await getCachedResponse(taskType, inputHash);
+      if (cached) return JSON.parse(cached);
     }
 
-    const resumeText = JSON.stringify(resume);
+    await trackAiUsage();
+
     const systemPrompt = `You are an expert AI Writing Assistant panel. Analyze the resume and output JSON suggestions for improvement.
     ${jobDescription ? `Compare against this job description: ${jobDescription}` : ''}
     Schema:
@@ -250,23 +243,29 @@ export class ResumeSuggestionService {
     }`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: aiModel,
+      const ai = getAIClient();
+      const response = await ai.chat.completions.create({
+        model: MODEL_FLASH, // suggestions is standard task, uses lower-cost Flash model
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Resume JSON:\n${resumeText}` }
+          { role: 'user', content: `Resume Data:\n${JSON.stringify(compactResume)}` },
         ],
-        temperature: 0.4
+        temperature: 0.4,
+        maxOutputTokens: 1200,
+        requestType: 'resume_suggestions',
       });
 
-      const parsed = JSON.parse(response.choices[0].message.content || '{}');
+      const contentText = response.content || '{}';
+      await saveCachedResponse(taskType, inputHash, contentText, response.provider, response.model);
+      const parsed = JSON.parse(contentText);
+      
       return {
-        scores: parsed.scores || LocalHeuristicAnalyzer.analyze(resume).scores,
-        suggestions: parsed.suggestions || []
+        scores: parsed.scores ?? LocalHeuristicAnalyzer.analyze(resume).scores,
+        suggestions: parsed.suggestions ?? [],
       };
     } catch (e) {
-      console.error("OpenAI failed, falling back to local heuristic:", e);
+      console.error('Gemini failed, falling back to local heuristic:', e);
       return LocalHeuristicAnalyzer.analyze(resume);
     }
   }
@@ -283,65 +282,90 @@ export class CoverLetterService {
     hiringManager?: string;
     tone: string;
     length: string;
-  }): Promise<string> {
-    await trackAiUsage();
+  }, bypassCache = false): Promise<string> {
+    const compactResume = {
+      firstName: params.resume.personalInfo.firstName,
+      lastName: params.resume.personalInfo.lastName,
+      summary: params.resume.summary,
+      skills: params.resume.skills?.map(s => s.name) ?? [],
+      experience: params.resume.experience?.map(e => ({ role: e.role, company: e.company, description: e.description })) ?? []
+    };
 
-    if (shouldUseMock()) {
-      await new Promise(r => setTimeout(r, 2000));
-      const name = `${params.resume.personalInfo.firstName} ${params.resume.personalInfo.lastName}`;
-      const manager = params.hiringManager || 'Hiring Manager';
-      
-      return `Dear ${manager},
+    const inputHash = computeHash({
+      compactResume,
+      jobDescription: params.jobDescription,
+      companyName: params.companyName,
+      hiringManager: params.hiringManager,
+      tone: params.tone,
+      length: params.length
+    });
+    const taskType = 'generate-cover-letter';
 
-I am writing to express my strong interest in the opportunity at ${params.companyName}. With a solid foundation in software development and experience building responsive interfaces, I am confident that my skills align well with the needs of your team.
-
-Throughout my career, I have focused on designing efficient architectures and translating business requirements into scalable code. Specifically, my expertise in templates and layouts will allow me to integrate seamlessly into your engineering workflows.
-
-Thank you for your time and consideration. I look forward to discussing how my qualifications align with the target role.
-
-Sincerely,
-${name}`;
+    if (!bypassCache) {
+      const cached = await getCachedResponse(taskType, inputHash);
+      if (cached) return cached;
     }
 
-    const resumeText = JSON.stringify(params.resume);
+    await trackAiUsage();
+
     const prompt = `Generate a personalized cover letter.
     Candidate Name: ${params.resume.personalInfo.firstName} ${params.resume.personalInfo.lastName}
-    Hiring Manager: ${params.hiringManager || 'Hiring Manager'}
+    Hiring Manager: ${params.hiringManager ?? 'Hiring Manager'}
     Company: ${params.companyName}
     Tone: ${params.tone}
     Length: ${params.length}
     Job Description: ${params.jobDescription}
-    Resume Details: ${resumeText}`;
+    Resume Details: ${JSON.stringify(compactResume)}`;
 
-    const response = await openai!.chat.completions.create({
-      model: aiModel,
+    const ai = getAIClient();
+    const response = await ai.chat.completions.create({
+      model: MODEL_PRO, // Cover letter requires high-quality premium model
       messages: [
-        { role: 'system', content: 'You are an elite career strategist. Write a cover letter using candidate info and job details. Maintain formatting.' },
-        { role: 'user', content: prompt }
+        {
+          role: 'system',
+          content: COVER_LETTER_SYSTEM,
+        },
+        { role: 'user', content: prompt },
       ],
-      temperature: 0.7
+      temperature: 0.7,
+      maxOutputTokens: 600,
+      requestType: 'cover_letter',
     });
 
-    return response.choices[0].message.content || '';
+    const result = response.content || '';
+    await saveCachedResponse(taskType, inputHash, result, response.provider, response.model);
+    return result;
   }
 
-  static async rewriteLetter(content: string, instruction: string): Promise<string> {
-    await trackAiUsage();
-    if (shouldUseMock()) {
-      await new Promise(r => setTimeout(r, 1500));
-      return `${content}\n\n[AI Refined with instruction: "${instruction}"]: Optimized text for better engagement and tone flow.`;
+  static async rewriteLetter(content: string, instruction: string, bypassCache = false): Promise<string> {
+    const inputHash = computeHash({ content, instruction });
+    const taskType = 'rewrite-cover-letter';
+
+    if (!bypassCache) {
+      const cached = await getCachedResponse(taskType, inputHash);
+      if (cached) return cached;
     }
 
-    const response = await openai!.chat.completions.create({
-      model: aiModel,
+    await trackAiUsage();
+
+    const ai = getAIClient();
+    const response = await ai.chat.completions.create({
+      model: MODEL_FLASH, // rewriting cover letters uses standard model
       messages: [
-        { role: 'system', content: 'You are a professional copywriter. Rewrite the cover letter text based on the user instructions.' },
-        { role: 'user', content: `Cover Letter:\n${content}\n\nInstruction: ${instruction}` }
+        {
+          role: 'system',
+          content: COVER_LETTER_REWRITE_SYSTEM,
+        },
+        { role: 'user', content: `Cover Letter:\n${content}\n\nInstruction: ${instruction}` },
       ],
-      temperature: 0.7
+      temperature: 0.7,
+      maxOutputTokens: 600,
+      requestType: 'rewrite_cover_letter',
     });
 
-    return response.choices[0].message.content || content;
+    const result = response.content || content;
+    await saveCachedResponse(taskType, inputHash, result, response.provider, response.model);
+    return result;
   }
 }
 
@@ -349,109 +373,40 @@ ${name}`;
 // 5. Resume Builder Service
 // ---------------------------------------------------------------------------
 export class ResumeBuilderService {
-  static async generateResume(prompt: string): Promise<Partial<Resume>> {
-    await trackAiUsage();
-    
-    if (shouldUseMock()) {
-      await new Promise(r => setTimeout(r, 2000));
-      return {
-        title: "AI Generated Resume",
-        targetRole: prompt.substring(0, 30) + (prompt.length > 30 ? "..." : ""),
-        summary: `This is an AI generated summary based on the prompt: "${prompt}". You can edit this text to better match your actual experience.`,
-        personalInfo: {
-          firstName: "Alex",
-          lastName: "Morgan",
-          email: "alex.morgan@example.com",
-          phone: "(555) 123-4567",
-          location: "San Francisco, CA",
-        },
-        experience: [
-          {
-            id: 'mock-exp-1',
-            role: "Senior Software Engineer",
-            company: "Tech Solutions Inc.",
-            location: "San Francisco, CA",
-            startDate: "2020-01",
-            endDate: "Present",
-            current: true,
-            description: "- Led development of core microservices using Node.js and React\n- Improved system performance by 40% through database optimization\n- Mentored junior engineers and conducted code reviews"
-          }
-        ],
-        education: [
-          {
-            id: 'mock-edu-1',
-            institution: "University of Technology",
-            degree: "Bachelor of Science",
-            fieldOfStudy: "Computer Science",
-            startDate: "2015-08",
-            endDate: "2019-05",
-            current: false
-          }
-        ],
-        skills: [
-          { id: 'mock-skill-1', name: "JavaScript", category: "Languages" },
-          { id: 'mock-skill-2', name: "React", category: "Hard" },
-          { id: 'mock-skill-3', name: "Node.js", category: "Hard" },
-        ]
-      };
+  static async generateResume(prompt: string, bypassCache = false): Promise<Partial<Resume>> {
+    const inputHash = computeHash(prompt);
+    const taskType = 'generate-resume';
+
+    if (!bypassCache) {
+      const cached = await getCachedResponse(taskType, inputHash);
+      if (cached) return JSON.parse(cached);
     }
 
-    const response = await openai!.chat.completions.create({
-      model: aiModel,
+    await trackAiUsage();
+
+    const ai = getAIClient();
+    const response = await ai.chat.completions.create({
+      model: MODEL_PRO, // Resume generation requires high-quality premium model
       response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
-          content: `You are an expert resume writer. Generate a highly professional, fully-fleshed out resume in JSON format based on the user's prompt. 
-          Use standard resume structure. Create realistic sounding companies and bullet points if they are not provided, tailored to the requested role.
-          
-          Return ONLY JSON matching this EXACT structure (excluding id, theme, lastModified which are handled by the client):
-          {
-            "title": "Resume Title",
-            "targetRole": "The target job title",
-            "summary": "A professional 3-4 sentence summary",
-            "personalInfo": { "firstName": "John", "lastName": "Doe", "email": "email@example.com", "phone": "555-555-5555", "location": "City, State" },
-            "experience": [
-              {
-                "id": "gen-exp-1",
-                "role": "Job Title",
-                "company": "Company Name",
-                "location": "City, State",
-                "startDate": "YYYY-MM",
-                "endDate": "YYYY-MM or Present",
-                "current": boolean,
-                "description": "- Bullet point 1\\n- Bullet point 2\\n- Bullet point 3"
-              }
-            ],
-            "education": [
-              {
-                "id": "gen-edu-1",
-                "institution": "School Name",
-                "degree": "Degree (e.g. BS)",
-                "fieldOfStudy": "Field of Study",
-                "startDate": "YYYY-MM",
-                "endDate": "YYYY-MM",
-                "current": boolean
-              }
-            ],
-            "skills": [
-              {
-                "id": "gen-skill-1",
-                "name": "Skill Name",
-                "category": "Hard"
-              }
-            ]
-          }`
+          content: RESUME_GENERATION_SYSTEM,
         },
         {
           role: 'user',
-          content: `Generate a resume based on this description:\n\n${prompt}`
-        }
+          content: `Generate a resume based on this description:\n\n${prompt}`,
+        },
       ],
-      temperature: 0.7
+      temperature: 0.7,
+      maxOutputTokens: 2000,
+      requestType: 'resume_generation',
     });
 
-    const parsed = JSON.parse(response.choices[0].message.content || '{}');
+    const contentText = response.content || '{}';
+    await saveCachedResponse(taskType, inputHash, contentText, response.provider, response.model);
+    const parsed = JSON.parse(contentText);
     return parsed as Partial<Resume>;
   }
 }
+

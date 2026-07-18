@@ -1,240 +1,367 @@
-import OpenAI from 'openai';
+import crypto from 'crypto';
 import { Resume } from '@/types';
-import { GeminiOpenAiWrapper, OpenAICompatClient } from './gemini-compat';
+import { MODEL_PRO, MODEL_FLASH } from './gemini-client';
+import { getAIClient } from './ai/provider-manager';
+import { checkAndIncrementAiUsage, getCachedResponse, saveCachedResponse } from '@/lib/db-service';
+import { IMPROVE_SUMMARY_SYSTEM } from './prompts/improve-summary';
+import { IMPROVE_EXPERIENCE_SYSTEM } from './prompts/improve-experience';
+import { ATS_ANALYSIS_SYSTEM, ATS_SCORE_SCHEMA_PROMPT } from './prompts/ats-analysis';
+import { COVER_LETTER_SYSTEM } from './prompts/cover-letter';
+import { LINKEDIN_HEADLINE_SYSTEM, LINKEDIN_ABOUT_SYSTEM } from './prompts/linkedin';
 
-// Initialize OpenAI/Gemini conditionally
-const getAiClientAndModel = (): { client: OpenAI | OpenAICompatClient | null; model: string } => {
-  const openAiKey = process.env.OPENAI_API_KEY;
-  if (openAiKey) {
-    return {
-      client: new OpenAI({ apiKey: openAiKey }),
-      model: 'gpt-4o-mini'
-    };
-  }
-
-  const geminiKey = process.env.GEMINI_API_KEY;
-  if (geminiKey) {
-    return {
-      client: new GeminiOpenAiWrapper(geminiKey),
-      model: 'gemini-3.5-flash'
-    };
-  }
-
-  return { client: null, model: '' };
-};
-
-const { client: openai, model: aiModel } = getAiClientAndModel();
-
-/**
- * Helper to determine if we should use mock data
- */
-const shouldUseMock = () => {
-  return !openai;
-};
-
-// --- AI Prompts and Rules ---
-const BASE_SYSTEM_PROMPT = `You are an expert executive resume writer and ATS optimization specialist.
-CRITICAL RULES:
-1. NEVER invent fake numbers, metrics, or achievements (e.g., "Increased sales by 50%").
-2. If metrics are missing, use professional qualitative phrasing (e.g., "Significantly improved operational efficiency").
-3. Be concise, impactful, and truthful.
-4. Output must be strictly resume-safe and professional.`;
-
-import { checkAndIncrementAiUsage } from '@/lib/db-service';
-
-// --- Service Methods ---
-
-export async function improveSummary(currentSummary: string): Promise<string> {
-  await checkAndIncrementAiUsage();
-  if (shouldUseMock()) {
-    // Return mock improvement
-    await new Promise(res => setTimeout(res, 1500));
-    return `Results-driven professional with a proven track record. ${currentSummary} Known for delivering high-quality solutions and optimizing processes.`;
-  }
-
-  const response = await openai!.chat.completions.create({
-    model: aiModel,
-    messages: [
-      { role: 'system', content: BASE_SYSTEM_PROMPT },
-      { role: 'user', content: `Improve the following resume professional summary to make it more impactful and ATS-friendly. Do not invent facts.\n\nCurrent Summary:\n${currentSummary}` }
-    ],
-    temperature: 0.7,
-  });
-
-  return response.choices[0].message.content || currentSummary;
+// Helper to compute sha256 hash of inputs
+function computeHash(input: unknown): string {
+  const str = typeof input === 'string' ? input : JSON.stringify(input);
+  return crypto.createHash('sha256').update(str).digest('hex');
 }
 
-export async function improveExperience(role: string, company: string, description: string): Promise<string> {
-  await checkAndIncrementAiUsage();
-  if (shouldUseMock()) {
-    await new Promise(res => setTimeout(res, 1500));
-    return `• Spearheaded initiatives at ${company} as ${role}.\n• Streamlined operations and delivered key projects on time.\n• Collaborated with cross-functional teams to achieve strategic goals.\n${description.split('\n').map(d => `• ${d}`).join('\n')}`;
-  }
-
-  const response = await openai!.chat.completions.create({
-    model: aiModel,
-    messages: [
-      { role: 'system', content: BASE_SYSTEM_PROMPT },
-      { role: 'user', content: `Rewrite the following work experience bullet points to be more action-oriented (using strong verbs). Format as a clean bulleted list using the "• " symbol. Do NOT invent fake percentages or revenue numbers.\n\nRole: ${role}\nCompany: ${company}\nCurrent Description:\n${description}` }
-    ],
-    temperature: 0.7,
-  });
-
-  return response.choices[0].message.content || description;
+// Convert user resume data into compact structured payload to save input tokens
+function getCompactResumeForAI(resume: Resume) {
+  return {
+    role: resume.targetRole || '',
+    summary: resume.summary || '',
+    skills: resume.skills?.map(s => s.name) ?? [],
+    experience: resume.experience?.map(e => ({
+      company: e.company || '',
+      role: e.role || '',
+      description: e.description || ''
+    })) ?? [],
+    education: resume.education?.map(edu => ({
+      institution: edu.institution || '',
+      degree: edu.degree || '',
+      fieldOfStudy: edu.fieldOfStudy || ''
+    })) ?? []
+  };
 }
 
-export async function generateATSScore(resume: Resume, jobDescription: string) {
-  await checkAndIncrementAiUsage();
-  if (shouldUseMock()) {
-    await new Promise(res => setTimeout(res, 2000));
-    return {
-      score: 78,
-      missingKeywords: ['TypeScript', 'Agile', 'GraphQL', 'CI/CD'],
-      suggestions: [
-        'Add more quantifiable achievements to your experience section.',
-        'Include CI/CD in your skills list as it appears frequently in the job description.',
-        'Tailor your summary to mention Agile methodologies explicitly.'
-      ]
-    };
+// Pre-process and extract keywords for ATS analysis to avoid sending whole resume text
+function extractAtsPayload(resume: Resume, jobDescription: string) {
+  const skills = resume.skills?.map(s => s.name) ?? [];
+  const experienceText = resume.experience?.map(e => `${e.role} ${e.company} ${e.description}`).join(' ') ?? '';
+  
+  const experienceKeywords = Array.from(new Set(
+    experienceText.toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 4 && !['about', 'their', 'there', 'would', 'could', 'should', 'using', 'through', 'under'].includes(w))
+  )).slice(0, 30);
+
+  const jobKeywords = Array.from(new Set(
+    jobDescription.toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 4 && !['about', 'their', 'there', 'would', 'could', 'should', 'using', 'through', 'under'].includes(w))
+  )).slice(0, 30);
+
+  return {
+    skills,
+    experience_keywords: experienceKeywords,
+    job_keywords: jobKeywords
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Service Methods
+// ---------------------------------------------------------------------------
+
+export async function improveSummary(currentSummary: string, bypassCache = false): Promise<string> {
+  const inputHash = computeHash(currentSummary);
+  const taskType = 'improve-summary';
+
+  if (!bypassCache) {
+    const cached = await getCachedResponse(taskType, inputHash);
+    if (cached) return cached;
   }
 
-  const resumeText = JSON.stringify(resume);
-  const response = await openai!.chat.completions.create({
-    model: aiModel,
+  await checkAndIncrementAiUsage();
+
+  const ai = getAIClient();
+  const response = await ai.chat.completions.create({
+    model: MODEL_FLASH, // grammar/summary improvements use lower-cost standard model
+    messages: [
+      { role: 'system', content: IMPROVE_SUMMARY_SYSTEM },
+      {
+        role: 'user',
+        content: `Improve this summary:\n${currentSummary}`,
+      },
+    ],
+    temperature: 0.7,
+    maxOutputTokens: 200,
+    requestType: 'improve_summary',
+  });
+
+  const result = response.content || currentSummary;
+  await saveCachedResponse(taskType, inputHash, result, response.provider, response.model);
+  return result;
+}
+
+export async function improveExperience(
+  role: string,
+  company: string,
+  description: string,
+  bypassCache = false
+): Promise<string> {
+  const inputHash = computeHash({ role, company, description });
+  const taskType = 'improve-experience';
+
+  if (!bypassCache) {
+    const cached = await getCachedResponse(taskType, inputHash);
+    if (cached) return cached;
+  }
+
+  await checkAndIncrementAiUsage();
+
+  const ai = getAIClient();
+  const response = await ai.chat.completions.create({
+    model: MODEL_FLASH, // grammar/experience improvements use lower-cost standard model
+    messages: [
+      { role: 'system', content: IMPROVE_EXPERIENCE_SYSTEM },
+      {
+        role: 'user',
+        content: `Role: ${role}\nCompany: ${company}\nCurrent Description:\n${description}`,
+      },
+    ],
+    temperature: 0.7,
+    maxOutputTokens: 250,
+    requestType: 'improve_experience',
+  });
+
+  const result = response.content || description;
+  await saveCachedResponse(taskType, inputHash, result, response.provider, response.model);
+  return result;
+}
+
+export async function generateATSScore(resume: Resume, jobDescription: string, bypassCache = false) {
+  const atsPayload = extractAtsPayload(resume, jobDescription);
+  const inputHash = computeHash({ atsPayload, jobDescription });
+  const taskType = 'ats-score';
+
+  if (!bypassCache) {
+    const cached = await getCachedResponse(taskType, inputHash);
+    if (cached) return JSON.parse(cached);
+  }
+
+  await checkAndIncrementAiUsage();
+
+  const ai = getAIClient();
+  const response = await ai.chat.completions.create({
+    model: MODEL_FLASH, // ATS scoring uses lower-cost standard model
     response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: `${BASE_SYSTEM_PROMPT}\nYou are evaluating a resume against a job description. Output strict JSON with this schema: { "score": number (0-100), "missingKeywords": string[], "suggestions": string[] }` },
-      { role: 'user', content: `Job Description:\n${jobDescription}\n\nResume JSON:\n${resumeText}` }
+      {
+        role: 'system',
+        content: `${ATS_ANALYSIS_SYSTEM}\n${ATS_SCORE_SCHEMA_PROMPT}`,
+      },
+      {
+        role: 'user',
+        content: `ATS Extracted Keywords:\n${JSON.stringify(atsPayload)}\n\nJob Description:\n${jobDescription}`,
+      },
     ],
     temperature: 0.2,
+    maxOutputTokens: 500,
+    requestType: 'ats_score',
   });
 
-  return JSON.parse(response.choices[0].message.content || '{}');
+  const resultText = response.content || '{}';
+  await saveCachedResponse(taskType, inputHash, resultText, response.provider, response.model);
+  return JSON.parse(resultText);
 }
 
-export async function extractKeywords(jobDescription: string): Promise<string[]> {
-  await checkAndIncrementAiUsage();
-  if (shouldUseMock()) {
-    await new Promise(res => setTimeout(res, 1000));
-    return ['React', 'Next.js', 'TypeScript', 'Tailwind', 'Node.js', 'REST APIs', 'Git', 'Agile'];
+export async function extractKeywords(jobDescription: string, bypassCache = false): Promise<string[]> {
+  const inputHash = computeHash(jobDescription);
+  const taskType = 'extract-keywords';
+
+  if (!bypassCache) {
+    const cached = await getCachedResponse(taskType, inputHash);
+    if (cached) return JSON.parse(cached);
   }
 
-  const response = await openai!.chat.completions.create({
-    model: aiModel,
+  await checkAndIncrementAiUsage();
+
+  const ai = getAIClient();
+  const response = await ai.chat.completions.create({
+    model: MODEL_FLASH, // keyword extraction uses lower-cost standard model
     response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: 'Extract the top 10 most critical hard skills and keywords from the job description. Output strictly JSON: { "keywords": string[] }' },
-      { role: 'user', content: `Job Description:\n${jobDescription}` }
+      {
+        role: 'system',
+        content: 'Extract the top 10 most critical hard skills and keywords from the job description. Output strictly JSON: { "keywords": string[] }',
+      },
+      { role: 'user', content: `Job Description:\n${jobDescription}` },
     ],
     temperature: 0.1,
+    maxOutputTokens: 200,
+    requestType: 'keyword_extraction',
   });
 
-  const data = JSON.parse(response.choices[0].message.content || '{"keywords":[]}');
-  return data.keywords || [];
+  const resultText = response.content || '{"keywords":[]}';
+  await saveCachedResponse(taskType, inputHash, resultText, response.provider, response.model);
+  const data = JSON.parse(resultText);
+  return data.keywords ?? [];
 }
 
-export async function matchResume(resume: Resume, jobDescription: string): Promise<string> {
-  await checkAndIncrementAiUsage();
-  if (shouldUseMock()) {
-    await new Promise(res => setTimeout(res, 2500));
-    return `To better align with this role, emphasize your experience with scalable architectures. Add specific examples of cross-team collaboration, as the JD heavily stresses teamwork. Consider highlighting your frontend performance optimization skills in the summary.`;
+export async function matchResume(resume: Resume, jobDescription: string, bypassCache = false): Promise<string> {
+  const compactResume = getCompactResumeForAI(resume);
+  const inputHash = computeHash({ compactResume, jobDescription });
+  const taskType = 'match-resume';
+
+  if (!bypassCache) {
+    const cached = await getCachedResponse(taskType, inputHash);
+    if (cached) return cached;
   }
 
-  const resumeText = JSON.stringify(resume);
-  const response = await openai!.chat.completions.create({
-    model: aiModel,
+  await checkAndIncrementAiUsage();
+
+  const ai = getAIClient();
+  const response = await ai.chat.completions.create({
+    model: MODEL_FLASH, // matching suggestions use lower-cost standard model
     messages: [
-      { role: 'system', content: BASE_SYSTEM_PROMPT },
-      { role: 'user', content: `Provide a short, actionable paragraph (max 4 sentences) advising the candidate on how to tweak their resume to better match the provided job description.\n\nJob Description:\n${jobDescription}\n\nResume:\n${resumeText}` }
+      {
+        role: 'system',
+        content: 'Provide a short, actionable paragraph (max 4 sentences) advising the candidate on how to tweak their resume to match the job description. Be direct, professional, and omit all extra explanations.',
+      },
+      {
+        role: 'user',
+        content: `Job Description:\n${jobDescription}\n\nResume Summary:\n${JSON.stringify(compactResume)}`,
+      },
     ],
     temperature: 0.5,
+    maxOutputTokens: 250,
+    requestType: 'match_resume',
   });
 
-  return response.choices[0].message.content || 'No matching advice generated.';
+  const result = response.content || 'No matching advice generated.';
+  await saveCachedResponse(taskType, inputHash, result, response.provider, response.model);
+  return result;
 }
 
-export async function generateCoverLetter(resume: Resume, jobDescription: string): Promise<string> {
-  await checkAndIncrementAiUsage();
-  if (shouldUseMock()) {
-    await new Promise(res => setTimeout(res, 2000));
-    return `Dear Hiring Manager,\n\nI am writing to express my strong interest in the open position. With my background in software development and proven ability to deliver high-quality solutions, I am confident in my ability to contribute effectively to your team.\n\nIn my previous roles, I have successfully designed and implemented robust web applications, consistently meeting project deadlines and exceeding expectations. I am particularly drawn to this opportunity because of your company's innovative approach and commitment to excellence.\n\nI would welcome the opportunity to discuss how my skills and experiences align with your needs. Thank you for your time and consideration.\n\nSincerely,\n${resume.personalInfo.firstName} ${resume.personalInfo.lastName}`;
-  }
-
-  const resumeText = JSON.stringify({
+export async function generateCoverLetter(resume: Resume, jobDescription: string, bypassCache = false): Promise<string> {
+  const compactResume = {
     name: `${resume.personalInfo.firstName} ${resume.personalInfo.lastName}`,
     summary: resume.summary,
-    experience: resume.experience,
-    skills: resume.skills
-  });
+    skills: resume.skills?.map(s => s.name) ?? [],
+    experience: resume.experience?.map(e => ({ role: e.role, company: e.company, description: e.description })) ?? []
+  };
 
-  const response = await openai!.chat.completions.create({
-    model: aiModel,
-    messages: [
-      { role: 'system', content: `${BASE_SYSTEM_PROMPT}\nWrite a compelling, professional cover letter based on the provided resume and job description. Do not include placeholder brackets like [Company Name] if the company is in the JD. If unknown, write it naturally without brackets. Keep it to 3-4 paragraphs.` },
-      { role: 'user', content: `Job Description:\n${jobDescription}\n\nResume:\n${resumeText}` }
-    ],
-    temperature: 0.7,
-  });
+  const inputHash = computeHash({ compactResume, jobDescription });
+  const taskType = 'cover-letter';
 
-  return response.choices[0].message.content || 'Failed to generate cover letter.';
-}
-
-export async function generateLinkedInHeadline(resume: Resume): Promise<string> {
-  await checkAndIncrementAiUsage();
-  if (shouldUseMock()) {
-    await new Promise(res => setTimeout(res, 1000));
-    return `${resume.targetRole} | Expert in building scalable web applications | Passionate about UX and Performance`;
+  if (!bypassCache) {
+    const cached = await getCachedResponse(taskType, inputHash);
+    if (cached) return cached;
   }
 
-  const response = await openai!.chat.completions.create({
-    model: aiModel,
+  await checkAndIncrementAiUsage();
+
+  const ai = getAIClient();
+  const response = await ai.chat.completions.create({
+    model: MODEL_PRO, // Cover letter requires high-quality premium model
     messages: [
-      { role: 'system', content: 'Generate a highly professional, ATS-friendly LinkedIn headline (max 120 chars) based on the user summary and target role. Do not use emojis.' },
-      { role: 'user', content: `Target Role: ${resume.targetRole}\nSummary: ${resume.summary}` }
+      { role: 'system', content: COVER_LETTER_SYSTEM },
+      { role: 'user', content: `Job Description:\n${jobDescription}\n\nResume Details:\n${JSON.stringify(compactResume)}` },
     ],
     temperature: 0.7,
+    maxOutputTokens: 600,
+    requestType: 'cover_letter',
   });
 
-  return response.choices[0].message.content || `${resume.targetRole} Professional`;
+  const result = response.content || 'Failed to generate cover letter.';
+  await saveCachedResponse(taskType, inputHash, result, response.provider, response.model);
+  return result;
 }
 
-export async function generateLinkedInAbout(resume: Resume): Promise<string> {
-  await checkAndIncrementAiUsage();
-  if (shouldUseMock()) {
-    await new Promise(res => setTimeout(res, 2000));
-    return `As a dedicated ${resume.targetRole}, I specialize in delivering impactful solutions that drive business success. My technical expertise spans modern web development frameworks, and I pride myself on bridging the gap between engineering and design.\n\nI am constantly exploring new technologies to improve system performance and user experience. When I'm not coding, I enjoy mentoring junior developers and contributing to open-source initiatives. Let's connect!`;
+export async function generateLinkedInHeadline(resume: Resume, bypassCache = false): Promise<string> {
+  const inputHash = computeHash({ targetRole: resume.targetRole, summary: resume.summary });
+  const taskType = 'linkedin-headline';
+
+  if (!bypassCache) {
+    const cached = await getCachedResponse(taskType, inputHash);
+    if (cached) return cached;
   }
 
-  const resumeText = JSON.stringify({ summary: resume.summary, experience: resume.experience, skills: resume.skills });
-  const response = await openai!.chat.completions.create({
-    model: aiModel,
+  await checkAndIncrementAiUsage();
+
+  const ai = getAIClient();
+  const response = await ai.chat.completions.create({
+    model: MODEL_PRO, // LinkedIn headline generation uses premium model for better branding
     messages: [
-      { role: 'system', content: `${BASE_SYSTEM_PROMPT}\nWrite an engaging, 2-3 paragraph LinkedIn "About" section. Use first-person perspective. It should be friendly but professional.` },
-      { role: 'user', content: `Resume Data:\n${resumeText}` }
+      { role: 'system', content: LINKEDIN_HEADLINE_SYSTEM },
+      { role: 'user', content: `Target Role: ${resume.targetRole}\nSummary: ${resume.summary}` },
     ],
     temperature: 0.7,
+    maxOutputTokens: 50,
+    requestType: 'linkedin_headline',
   });
 
-  return response.choices[0].message.content || resume.summary;
+  const result = response.content || `${resume.targetRole} Professional`;
+  await saveCachedResponse(taskType, inputHash, result, response.provider, response.model);
+  return result;
 }
 
-export async function suggestSkills(targetRole: string): Promise<string[]> {
-  await checkAndIncrementAiUsage();
-  if (shouldUseMock()) {
-    await new Promise(res => setTimeout(res, 1000));
-    return ['Leadership', 'Project Management', 'Agile Methodologies', 'Data Analysis', 'Problem Solving', 'Communication', 'Strategic Planning', 'Cross-functional Collaboration'];
+export async function generateLinkedInAbout(resume: Resume, bypassCache = false): Promise<string> {
+  const compactResume = {
+    summary: resume.summary,
+    skills: resume.skills?.map(s => s.name) ?? [],
+    experience: resume.experience?.map(e => ({ role: e.role, company: e.company, description: e.description })) ?? []
+  };
+
+  const inputHash = computeHash(compactResume);
+  const taskType = 'linkedin-about';
+
+  if (!bypassCache) {
+    const cached = await getCachedResponse(taskType, inputHash);
+    if (cached) return cached;
   }
 
-  const response = await openai!.chat.completions.create({
-    model: aiModel,
+  await checkAndIncrementAiUsage();
+
+  const ai = getAIClient();
+  const response = await ai.chat.completions.create({
+    model: MODEL_PRO, // LinkedIn About generation uses premium model for better branding
+    messages: [
+      { role: 'system', content: LINKEDIN_ABOUT_SYSTEM },
+      { role: 'user', content: `Resume Data:\n${JSON.stringify(compactResume)}` },
+    ],
+    temperature: 0.7,
+    maxOutputTokens: 300,
+    requestType: 'linkedin_about',
+  });
+
+  const result = response.content || resume.summary;
+  await saveCachedResponse(taskType, inputHash, result, response.provider, response.model);
+  return result;
+}
+
+export async function suggestSkills(targetRole: string, bypassCache = false): Promise<string[]> {
+  const inputHash = computeHash(targetRole);
+  const taskType = 'suggest-skills';
+
+  if (!bypassCache) {
+    const cached = await getCachedResponse(taskType, inputHash);
+    if (cached) return JSON.parse(cached);
+  }
+
+  await checkAndIncrementAiUsage();
+
+  const ai = getAIClient();
+  const response = await ai.chat.completions.create({
+    model: MODEL_FLASH, // suggestSkills uses lower-cost standard model
     response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: 'You are an ATS expert. Suggest the top 8 most demanded skills for a given role. Return strictly JSON: { "skills": string[] }' },
-      { role: 'user', content: `Target Role: ${targetRole}` }
+      {
+        role: 'system',
+        content: 'You are an ATS expert. Suggest the top 8 most demanded skills for a given role. Return strictly JSON: { "skills": string[] }',
+      },
+      { role: 'user', content: `Target Role: ${targetRole}` },
     ],
     temperature: 0.4,
+    maxOutputTokens: 200,
+    requestType: 'suggest_skills',
   });
 
-  const data = JSON.parse(response.choices[0].message.content || '{"skills":[]}');
-  return data.skills || [];
+  const resultText = response.content || '{"skills":[]}';
+  await saveCachedResponse(taskType, inputHash, resultText, response.provider, response.model);
+  const data = JSON.parse(resultText);
+  return data.skills ?? [];
 }
+
