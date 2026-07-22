@@ -19,7 +19,7 @@ export default async function SettingsPage() {
   const exportPercent = limits.exportsPerMonth === Infinity ? 0 : Math.min(100, (exportUsageCount / limits.exportsPerMonth) * 100);
 
   return (
-    <div className="p-4 md:p-8 w-full space-y-6 font-sans">
+    <div className="p-2 md:p-4 w-full space-y-6 font-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="bg-primary/10 p-2.5 rounded-xl shadow-sm border border-primary/10">

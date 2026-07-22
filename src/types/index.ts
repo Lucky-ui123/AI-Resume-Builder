@@ -8,9 +8,44 @@ export interface User {
 export interface ThemeConfig {
   primaryColor: string;
   secondaryColor?: string;
+  accentColor?: string;
+  headingColor?: string;
+  bodyColor?: string;
+  linkColor?: string;
+  dividerColor?: string;
+  backgroundColor?: string;
+  
   fontFamily: string;
   fontSize: 'small' | 'medium' | 'large';
   spacing: 'compact' | 'normal' | 'relaxed';
+  
+  fontSizeHeading?: number;
+  fontSizeBody?: number;
+  fontSizeName?: number;
+  fontWeightBody?: string;
+  lineHeight?: number;
+  letterSpacing?: number;
+  
+  sectionStyle?: 'minimal' | 'modern' | 'classic' | 'executive' | 'creative';
+  headingStyle?: 'style1' | 'style2' | 'style3' | 'style4' | 'style5';
+  dividerStyle?: 'solid' | 'double' | 'dotted' | 'dashed' | 'none';
+  
+  density?: 'compact' | 'normal' | 'comfortable';
+  sectionSpacing?: number;
+  contentPadding?: number;
+  pageMargin?: 'narrow' | 'normal' | 'wide' | 'custom';
+  borderRadius?: number;
+  
+  iconsEnabled?: boolean;
+  iconStyle?: 'outline' | 'filled' | 'minimal';
+  
+  photoEnabled?: boolean;
+  photoShape?: 'circle' | 'rounded-square' | 'square';
+  photoSize?: 'small' | 'medium' | 'large';
+  photoPosition?: 'left' | 'center' | 'right';
+  
+  paperSize?: 'a4' | 'letter' | 'legal';
+  orientation?: 'portrait' | 'landscape';
 }
 
 export interface Resume {

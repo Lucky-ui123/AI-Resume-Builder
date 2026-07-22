@@ -1,54 +1,31 @@
 
 
-/**
- * Extracts the active CSS text from the document.
- */
-const getGlobalCSS = () => {
-  let cssText = '';
-  try {
-    for (const styleSheet of Array.from(document.styleSheets)) {
-      try {
-        for (const rule of Array.from(styleSheet.cssRules || [])) {
-          cssText += rule.cssText + '\n';
-        }
-      } catch {
-        // Ignore CORS errors for external stylesheets
-      }
-    }
-  } catch {
-    // Ignore stylesheet reading errors
-  }
-  return cssText;
-};
+
 
 export const generatePDF = async (elementId: string, filename: string) => {
   const element = document.getElementById(elementId);
   if (!element) throw new Error('Could not find the resume preview element.');
 
-  const cssText = getGlobalCSS();
-  const htmlContent = element.innerHTML;
+  // Dynamically import html2pdf to prevent SSR compilation errors
+  const html2pdf = (await import('html2pdf.js')).default;
 
-  const response = await fetch('/api/export/pdf', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  const opt = {
+    margin: 0,
+    filename: filename,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { 
+      scale: 2.5, 
+      useCORS: true,
+      letterRendering: true,
     },
-    body: JSON.stringify({ html: htmlContent, css: cssText }),
-  });
+    jsPDF: { 
+      unit: 'mm', 
+      format: 'a4', 
+      orientation: 'portrait' as const
+    },
+    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+  };
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Failed to generate PDF');
-  }
-
-  const blob = await response.blob();
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  window.URL.revokeObjectURL(url);
+  await html2pdf().set(opt).from(element).save();
 };
 
