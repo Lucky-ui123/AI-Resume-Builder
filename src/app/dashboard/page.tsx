@@ -2,8 +2,10 @@ import { getDashboardStats, getUserSubscription } from '@/lib/db-service';
 import DashboardClient from './DashboardClient';
 
 export default async function DashboardPage() {
-  const stats = await getDashboardStats();
-  const { userName } = await getUserSubscription();
+  const [stats, { userName }] = await Promise.all([
+    getDashboardStats(),
+    getUserSubscription()
+  ]);
 
   return (
     <DashboardClient 

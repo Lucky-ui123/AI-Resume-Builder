@@ -3,25 +3,27 @@ import { getUserSubscription } from '@/lib/db-service';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import Link from 'next/link';
 import { buttonVariants } from '@/components/ui/button';
-import { Lock } from 'lucide-react';
+import { Lock, Network } from 'lucide-react';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContainer } from '@/components/ui/PageContainer';
+import { PageContent } from '@/components/ui/PageContent';
 
 export default async function LinkedinPage({ searchParams }: { searchParams: { id?: string } }) {
   const { limits } = await getUserSubscription();
 
   if (!limits.hasLinkedin) {
     return (
-      <div className="p-4 md:p-8 w-full space-y-8 font-sans">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <div className="flex items-center gap-4">
-            <div className="bg-[#0A66C2]/10 p-2.5 rounded-xl shadow-sm border border-[#0A66C2]/10">
-              <Lock className="h-7 w-7 text-[#0A66C2]" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-extrabold tracking-tight">LinkedIn Optimizer</h1>
-              <p className="text-muted-foreground mt-1 text-lg">Transform your resume into a compelling LinkedIn profile.</p>
-            </div>
-          </div>
+      <div className="flex h-full flex-col overflow-y-auto bg-muted/10 font-sans">
+        <div className="sticky top-0 z-20 px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+          <PageHeader
+            icon={<Network className="text-[#0A66C2]" />}
+            title="LinkedIn Optimizer"
+            description="Transform your resume into a compelling LinkedIn profile."
+          />
         </div>
+
+        <PageContainer>
+          <PageContent>
 
         <div className="max-w-2xl mx-auto mt-12">
           <Card className="border-border shadow-sm">
@@ -44,6 +46,8 @@ export default async function LinkedinPage({ searchParams }: { searchParams: { i
             </CardFooter>
           </Card>
         </div>
+        </PageContent>
+      </PageContainer>
       </div>
     );
   }

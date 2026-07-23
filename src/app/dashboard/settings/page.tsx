@@ -10,6 +10,9 @@ import { Progress } from '@/components/ui/progress';
 import { getUserSubscription, getDashboardStats } from '@/lib/db-service';
 import { updateProfileAction } from './actions';
 import Link from 'next/link';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContainer } from '@/components/ui/PageContainer';
+import { PageContent } from '@/components/ui/PageContent';
 
 export default async function SettingsPage() {
   const { plan, aiUsageCount, exportUsageCount, limits, userEmail, userName } = await getUserSubscription();
@@ -19,18 +22,17 @@ export default async function SettingsPage() {
   const exportPercent = limits.exportsPerMonth === Infinity ? 0 : Math.min(100, (exportUsageCount / limits.exportsPerMonth) * 100);
 
   return (
-    <div className="p-2 md:p-4 w-full space-y-6 font-sans">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-primary/10 p-2.5 rounded-xl shadow-sm border border-primary/10">
-            <Settings className="h-7 w-7 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">Account Settings</h1>
-            <p className="text-muted-foreground mt-1 text-lg">Manage your account preferences and billing details.</p>
-          </div>
-        </div>
+    <div className="flex h-full flex-col overflow-y-auto bg-muted/10 font-sans">
+      <div className="sticky top-0 z-20 px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+        <PageHeader
+          icon={<Settings />}
+          title="Account Settings"
+          description="Manage your account preferences and billing details."
+        />
       </div>
+
+      <PageContainer>
+        <PageContent>
 
       <Tabs defaultValue="general" className="w-full">
         <TabsList className="mb-8 w-fit">
@@ -208,6 +210,8 @@ export default async function SettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      </PageContent>
+    </PageContainer>
     </div>
   );
 }

@@ -9,6 +9,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { AlertCircle, CheckCircle, AlertTriangle, FileSearch, Loader2, Sparkles } from 'lucide-react';
 import { Resume } from '@/types';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContainer } from '@/components/ui/PageContainer';
+import { PageContent } from '@/components/ui/PageContent';
 
 interface AtsReport {
   overallScore: number;
@@ -77,29 +80,30 @@ export default function AtsReportClient({ resume }: { resume: Resume }) {
   }, []);
 
   return (
-    <div className="p-2 md:p-4 w-full space-y-8 font-sans">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-primary/10 p-2.5 rounded-xl shadow-sm border border-primary/10">
-            <FileSearch className="h-7 w-7 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">ATS Score Report</h1>
-            <p className="text-muted-foreground mt-1 text-lg">Detailed analysis of how Applicant Tracking Systems parse your resume.</p>
-          </div>
-        </div>
-        <Button 
-          onClick={handleAnalyze} 
-          disabled={isAnalyzing}
-          className="shadow-sm font-bold text-white"
-        >
-          {isAnalyzing ? (
-            <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Scanning...</>
-          ) : (
-            <><Sparkles className="mr-2 h-5 w-5" /> Run ATS Scan</>
-          )}
-        </Button>
+    <div className="flex h-full flex-col overflow-y-auto bg-muted/10 font-sans">
+      <div className="sticky top-0 z-20 px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+        <PageHeader
+          icon={<FileSearch />}
+          title="ATS Score Report"
+          description="Detailed analysis of how Applicant Tracking Systems parse your resume."
+          actions={
+            <Button 
+              onClick={handleAnalyze} 
+              disabled={isAnalyzing}
+              className="shadow-sm font-bold text-white"
+            >
+              {isAnalyzing ? (
+                <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Scanning...</>
+              ) : (
+                <><Sparkles className="mr-2 h-5 w-5" /> Run ATS Scan</>
+              )}
+            </Button>
+          }
+        />
       </div>
+
+      <PageContainer>
+      <PageContent>
 
       {error && (
         <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-4 rounded-md border border-destructive/20">
@@ -218,6 +222,8 @@ export default function AtsReportClient({ resume }: { resume: Resume }) {
           )}
         </>
       )}
+      </PageContent>
+    </PageContainer>
     </div>
   );
 }

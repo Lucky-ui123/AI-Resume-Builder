@@ -10,6 +10,10 @@ import { Resume } from '@/types';
 import { UpgradeModal } from '@/components/ui/UpgradeModal';
 import { useResumes } from '@/context/ResumeContext';
 import Link from 'next/link';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContainer } from '@/components/ui/PageContainer';
+import { PageContent } from '@/components/ui/PageContent';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function LinkedinClient({ initialId }: { initialId?: string }) {
   const { resumes, isLoading } = useResumes();
@@ -101,46 +105,50 @@ export default function LinkedinClient({ initialId }: { initialId?: string }) {
     }
 
     return (
-      <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2">Select a Resume to Optimize</h1>
-          <p className="text-muted-foreground">Choose which resume you want to use for generating a LinkedIn profile.</p>
+      <div className="flex h-full flex-col overflow-y-auto bg-muted/10 font-sans">
+        <div className="sticky top-0 z-20 px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+          <PageHeader
+            icon={<Network className="text-[#0A66C2]" />}
+            title="Select a Resume to Optimize"
+            description="Choose which resume you want to use for generating a LinkedIn profile."
+          />
         </div>
-        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {resumes.map((r: Resume) => (
-            <Link href={`/dashboard/linkedin?id=${r.id}`} key={r.id} className="block group">
-              <div className="border rounded-xl p-5 hover:border-[#0A66C2] hover:shadow-md transition-all h-full bg-card">
-                <div className="w-10 h-10 rounded-lg bg-[#0A66C2]/10 flex items-center justify-center mb-3">
-                  <FileText className="h-5 w-5 text-[#0A66C2]" />
-                </div>
-                <h3 className="font-semibold text-lg truncate mb-1">{r.title || 'Untitled'}</h3>
-                <p className="text-sm text-muted-foreground truncate">{r.targetRole || 'General Resume'}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <PageContainer>
+          <PageContent>
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {resumes.map((r: Resume) => (
+                <Link href={`/dashboard/linkedin?id=${r.id}`} key={r.id} className="block group">
+                  <div className="border rounded-xl p-5 hover:border-[#0A66C2] hover:shadow-md transition-all h-full bg-card">
+                    <div className="w-10 h-10 rounded-lg bg-[#0A66C2]/10 flex items-center justify-center mb-3">
+                      <FileText className="h-5 w-5 text-[#0A66C2]" />
+                    </div>
+                    <h3 className="font-semibold text-lg truncate mb-1">{r.title || 'Untitled'}</h3>
+                    <p className="text-sm text-muted-foreground truncate">{r.targetRole || 'General Resume'}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </PageContent>
+        </PageContainer>
       </div>
     );
   }
 
   return (
-    <>
+    <div className="flex h-full flex-col overflow-y-auto bg-muted/10 font-sans">
       <UpgradeModal 
         isOpen={error === 'AI_LIMIT_REACHED'} 
         onClose={() => setError(null)} 
       />
-      <div className="p-4 md:p-8 w-full space-y-8 font-sans">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
-        <div className="flex items-center gap-4">
-          <div className="bg-[#0A66C2]/10 p-2.5 rounded-xl shadow-sm border border-[#0A66C2]/10">
-            <Network className="h-7 w-7 text-[#0A66C2]" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">LinkedIn Optimizer</h1>
-            <p className="text-muted-foreground mt-1 text-lg">Transform your resume into a compelling LinkedIn profile.</p>
-          </div>
-        </div>
+      <div className="sticky top-0 z-20 px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+        <PageHeader
+          icon={<Network className="text-[#0A66C2]" />}
+          title="LinkedIn Optimizer"
+          description="Transform your resume into a compelling LinkedIn profile."
+        />
       </div>
+      <PageContainer>
+        <PageContent>
 
       {error && (
         <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-4 rounded-md border border-destructive/20">
@@ -227,7 +235,8 @@ export default function LinkedinClient({ initialId }: { initialId?: string }) {
           </Card>
         </div>
       )}
-      </div>
-    </>
+      </PageContent>
+    </PageContainer>
+    </div>
   );
 }

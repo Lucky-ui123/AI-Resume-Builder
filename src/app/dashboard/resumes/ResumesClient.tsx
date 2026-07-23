@@ -28,6 +28,11 @@ import { formatDistanceToNow } from 'date-fns';
 import { showSuccess, showError, showLoading, dismissToast } from '@/lib/toast';
 import { ResumeCard } from '@/components/dashboard/ResumeCard';
 import { ResumePreview } from '@/components/resume/ResumePreview';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContainer } from '@/components/ui/PageContainer';
+import { PageContent } from '@/components/ui/PageContent';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { useResumes } from '@/context/ResumeContext';
 
 export default function ResumesClient() {
@@ -234,71 +239,66 @@ export default function ResumesClient() {
   };
 
   if (contextLoading && resumes.length === 0) {
-    return (
-      <div className="py-8 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[200px]">
-        <Loader2 className="animate-spin h-8 w-8 text-primary mb-2" />
-        <span>Loading resumes...</span>
-      </div>
-    );
+    return <LoadingState message="Loading resumes..." />;
   }
 
   if (resumes.length === 0) {
     return (
-      <div className="p-8 w-full space-y-6 pb-12">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-primary/10 p-2.5 rounded-xl shadow-sm border border-primary/10">
-            <FileText className="h-7 w-7 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">My Resumes</h1>
-            <p className="text-muted-foreground mt-1 text-lg">Manage and organize your saved resumes.</p>
-          </div>
+      <div className="flex h-full flex-col overflow-y-auto bg-muted/10 font-sans">
+        <div className="sticky top-0 z-20 px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+          <PageHeader
+            icon={<FileText />}
+            title="My Resumes"
+            description="Manage and organize your saved resumes."
+          />
         </div>
-      </div>
-        
-        <div className="flex flex-col items-center justify-center py-20 text-center border border-dashed border-border rounded-2xl bg-card/50">
-          <FileText className="h-16 w-16 text-muted-foreground mb-4 opacity-50" />
-          <h3 className="text-xl font-semibold mb-2">No resumes yet</h3>
-          <p className="text-muted-foreground mb-6 max-w-sm">
-            Create your first resume to start matching with jobs and generating cover letters.
-          </p>
-          <div className="flex items-center gap-4">
-            <Button onClick={() => router.push('/dashboard/builder?id=new')}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create New
-            </Button>
-            <Button variant="outline" onClick={() => router.push('/dashboard/upload')}>
-              <UploadCloud className="mr-2 h-4 w-4" />
-              Upload Existing
-            </Button>
-          </div>
-        </div>
+        <PageContainer>
+          <PageContent>
+            <EmptyState
+              icon={<FileText />}
+              title="No resumes yet"
+              description="Create your first resume to start matching with jobs and generating cover letters."
+              action={
+                <>
+                  <Button onClick={() => router.push('/dashboard/builder?id=new')}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create New
+                  </Button>
+                  <Button variant="outline" onClick={() => router.push('/dashboard/upload')}>
+                    <UploadCloud className="mr-2 h-4 w-4" />
+                    Upload Existing
+                  </Button>
+                </>
+              }
+            />
+          </PageContent>
+        </PageContainer>
       </div>
     );
   }
 
   return (
-    <div className="p-8 w-full space-y-6 pb-12 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-primary/10 p-2.5 rounded-xl shadow-sm border border-primary/10">
-            <FileText className="h-7 w-7 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">My Resumes</h1>
-            <p className="text-muted-foreground mt-1 text-lg">Manage and organize your saved resumes.</p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => router.push('/dashboard/upload')}>
-            <UploadCloud className="h-4 w-4 mr-2" /> Upload
-          </Button>
-          <Button size="sm" onClick={() => router.push('/dashboard/builder?id=new')}>
-            <Plus className="h-4 w-4 mr-2" /> New Resume
-          </Button>
-        </div>
+    <div className="flex h-full flex-col overflow-y-auto bg-muted/10 font-sans">
+      <div className="sticky top-0 z-20 px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+        <PageHeader
+          icon={<FileText />}
+          title="My Resumes"
+          description="Manage and organize your saved resumes."
+          actions={
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => router.push('/dashboard/upload')}>
+                <UploadCloud className="h-4 w-4 mr-2" /> Upload
+              </Button>
+              <Button size="sm" onClick={() => router.push('/dashboard/builder?id=new')}>
+                <Plus className="h-4 w-4 mr-2" /> New Resume
+              </Button>
+            </div>
+          }
+        />
       </div>
+
+      <PageContainer>
+        <PageContent>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {resumes.map((resume) => (
@@ -434,6 +434,8 @@ export default function ResumesClient() {
           </div>
         </SheetContent>
       </Sheet>
+      </PageContent>
+    </PageContainer>
     </div>
   );
 }

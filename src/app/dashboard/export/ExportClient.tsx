@@ -11,6 +11,9 @@ import { ResumePreview, LayoutType } from '@/components/resume/ResumePreview';
 import { Resume } from '@/types';
 
 import { UpgradeModal } from '@/components/ui/UpgradeModal';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContainer } from '@/components/ui/PageContainer';
+import { PageContent } from '@/components/ui/PageContent';
 
 export default function ExportClient({ hasAdvancedTemplates, resume }: { hasAdvancedTemplates: boolean, resume: Resume }) {
   const [isExporting, setIsExporting] = useState(false);
@@ -64,25 +67,22 @@ export default function ExportClient({ hasAdvancedTemplates, resume }: { hasAdva
   };
 
   return (
-    <>
+    <div className="flex h-full flex-col overflow-y-auto bg-muted/10 font-sans">
       <UpgradeModal 
         isOpen={exportError === 'EXPORT_LIMIT_REACHED'} 
         onClose={() => setExportError(null)} 
         title="Export Limit Reached"
         description="You've reached your monthly export limit. Upgrade to Pro for unlimited exports."
       />
-      <div className="p-4 md:p-8 w-full space-y-8 font-sans">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="bg-primary/10 p-2.5 rounded-xl shadow-sm border border-primary/10">
-              <FileOutput className="h-7 w-7 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-extrabold tracking-tight">Export Resume</h1>
-              <p className="text-muted-foreground mt-1 text-lg">Download your tailored resume in multiple formats.</p>
-            </div>
-          </div>
-        </div>
+      <div className="sticky top-0 z-20 px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+        <PageHeader
+          icon={<FileOutput />}
+          title="Export Resume"
+          description="Download your tailored resume in multiple formats."
+        />
+      </div>
+      <PageContainer>
+        <PageContent>
 
       <div className="grid md:grid-cols-2 gap-8">
         <Card className="shadow-sm hover:shadow-md transition-all duration-300 border-border rounded-2xl">
@@ -203,7 +203,8 @@ export default function ExportClient({ hasAdvancedTemplates, resume }: { hasAdva
           <ResumePreview resume={resume} />
         </div>
       </div>
-      </div>
-    </>
+      </PageContent>
+    </PageContainer>
+    </div>
   );
 }

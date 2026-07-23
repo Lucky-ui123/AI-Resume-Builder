@@ -27,6 +27,10 @@ import {
   lsDuplicateCoverLetter 
 } from '@/lib/local-storage-service';
 import { showSuccess, showError, showLoading, dismissToast } from '@/lib/toast';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContainer } from '@/components/ui/PageContainer';
+import { PageContent } from '@/components/ui/PageContent';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function CoverLettersClient() {
   const { resumes, isLoading: resumesLoading } = useResumes();
@@ -214,25 +218,21 @@ export default function CoverLettersClient() {
   };
 
   if (resumesLoading) {
-    return (
-      <div className="py-20 text-center flex flex-col items-center justify-center min-h-[400px]">
-        <Loader2 className="animate-spin h-8 w-8 text-primary mb-2" />
-        <span>Loading Cover Letters...</span>
-      </div>
-    );
+    return <LoadingState message="Loading Cover Letters..." />;
   }
 
   return (
-    <div className="p-2 md:p-4 max-w-6xl mx-auto space-y-8 font-sans">
-      <div className="flex items-center gap-4">
-        <div className="bg-primary/10 p-2.5 rounded-xl border border-primary/10">
-          <FileSignature className="h-7 w-7 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">AI Cover Letters</h1>
-          <p className="text-muted-foreground mt-0.5 text-lg">Generate customized, professional cover letters tailored to your resumes.</p>
-        </div>
+    <div className="flex h-full flex-col overflow-y-auto bg-muted/10 font-sans">
+      <div className="sticky top-0 z-20 px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+        <PageHeader
+          icon={<FileSignature />}
+          title="AI Cover Letters"
+          description="Generate customized, professional cover letters tailored to your resumes."
+        />
       </div>
+
+      <PageContainer>
+        <PageContent>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Settings Panel */}
@@ -478,6 +478,8 @@ export default function CoverLettersClient() {
           </div>
         </div>
       )}
+      </PageContent>
+    </PageContainer>
     </div>
   );
 }

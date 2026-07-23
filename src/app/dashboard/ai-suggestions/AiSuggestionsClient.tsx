@@ -8,6 +8,9 @@ import { Sparkles, Check, X, Loader2, AlertCircle } from 'lucide-react';
 import { Resume } from '@/types';
 import { saveResumeAction } from '../builder/actions';
 import { useRouter } from 'next/navigation';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContainer } from '@/components/ui/PageContainer';
+import { PageContent } from '@/components/ui/PageContent';
 
 interface Suggestion {
   id: string;
@@ -121,25 +124,26 @@ export default function AiSuggestionsClient({ resume }: { resume: Resume }) {
   };
 
   return (
-    <div className="p-2 md:p-4 w-full space-y-8 font-sans">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-primary/10 p-2.5 rounded-xl shadow-sm border border-primary/10">
-            <Sparkles className="h-7 w-7 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">Smart Suggestions</h1>
-            <p className="text-muted-foreground mt-1 text-lg">Review AI-powered improvements for your resume content.</p>
-          </div>
-        </div>
-        <Button onClick={handleScan} disabled={isScanning} className="font-bold shadow-sm text-white">
-          {isScanning ? (
-            <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Scanning Resume...</>
-          ) : (
-            <><Sparkles className="mr-2 h-5 w-5" /> Scan for Improvements</>
-          )}
-        </Button>
+    <div className="flex h-full flex-col overflow-y-auto bg-muted/10 font-sans">
+      <div className="px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+        <PageHeader
+          icon={<Sparkles />}
+          title="Smart Suggestions"
+          description="Review AI-powered improvements for your resume content."
+          actions={
+            <Button onClick={handleScan} disabled={isScanning} className="font-bold shadow-sm text-white">
+              {isScanning ? (
+                <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Scanning Resume...</>
+              ) : (
+                <><Sparkles className="mr-2 h-5 w-5" /> Generate Suggestions</>
+              )}
+            </Button>
+          }
+        />
       </div>
+
+      <PageContainer>
+      <PageContent>
 
       {error && (
         <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-4 rounded-md border border-destructive/20">
@@ -235,6 +239,8 @@ export default function AiSuggestionsClient({ resume }: { resume: Resume }) {
           ))}
         </div>
       )}
+      </PageContent>
+    </PageContainer>
     </div>
   );
 }

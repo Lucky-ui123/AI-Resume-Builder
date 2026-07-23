@@ -1,7 +1,8 @@
 'use client';
 
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { logout } from '@/app/(auth)/actions';
 import { 
   FileText, 
@@ -49,6 +50,14 @@ export default function DashboardSidebar({
   onToggleCollapse?: () => void
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [optimisticPath, setOptimisticPath] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    setOptimisticPath(null);
+  }, [pathname]);
+
+  const currentPath = optimisticPath || pathname;
 
   return (
     <div className={`flex h-screen flex-col bg-sidebar border-r border-sidebar-border text-sidebar-foreground transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-64 md:w-64'}`}>
@@ -95,20 +104,31 @@ export default function DashboardSidebar({
       <div className="flex-1 overflow-y-auto py-4 custom-scrollbar">
         <nav className="space-y-0.5 px-3">
           {navigation.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = currentPath === item.href;
             
+            const handlePrefetch = () => {
+              router.prefetch(item.href);
+            };
+
+            const handleClick = () => {
+              setOptimisticPath(item.href);
+              if (onClose) onClose();
+            };
+
             const linkContent = (
               <Link
                 key={item.name}
                 href={item.href}
-                className={`group flex items-center rounded-lg py-2.5 text-sm font-medium transition-all duration-200 ${
+                className={`group flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors duration-75 ${
                   isCollapsed ? 'justify-center px-0 mx-2' : 'px-3'
                 } ${
                   isActive
-                    ? 'bg-primary !text-white shadow-md hover:shadow-lg'
+                    ? 'bg-primary !text-white shadow-md'
                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
-                onClick={() => onClose && onClose()}
+                onMouseEnter={handlePrefetch}
+                onTouchStart={handlePrefetch}
+                onClick={handleClick}
               >
                 <item.icon
                   className={`h-5 w-5 flex-shrink-0 transition-colors ${
@@ -128,17 +148,19 @@ export default function DashboardSidebar({
                   <TooltipTrigger render={(props) => (
                     <Link
                       href={item.href}
-                      className={`group flex items-center rounded-lg py-2.5 text-sm font-medium transition-all duration-200 justify-center px-0 mx-2 ${
-                        pathname === item.href
-                          ? 'bg-primary !text-white shadow-md hover:shadow-lg'
+                      className={`group flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors duration-75 justify-center px-0 mx-2 ${
+                        isActive
+                          ? 'bg-primary !text-white shadow-md'
                           : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                       }`}
-                      onClick={() => onClose && onClose()}
+                      onMouseEnter={handlePrefetch}
+                      onTouchStart={handlePrefetch}
+                      onClick={handleClick}
                       {...props}
                     >
                       <item.icon
                         className={`h-5 w-5 flex-shrink-0 transition-colors ${
-                          pathname === item.href ? '!text-white' : 'text-muted-foreground group-hover:text-foreground'
+                          isActive ? '!text-white' : 'text-muted-foreground group-hover:text-foreground'
                         }`}
                         aria-hidden="true"
                       />

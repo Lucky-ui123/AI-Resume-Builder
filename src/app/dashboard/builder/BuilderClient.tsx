@@ -22,12 +22,18 @@ import { Resume, Skill, ResumeSuggestion, ThemeConfig } from '@/types';
 import { ResumePreview } from '@/components/resume/ResumePreview';
 import { showSuccess, showError, showLoading, dismissToast } from '@/lib/toast';
 import { templates } from '@/lib/templates';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { TemplateMiniPreview } from '@/components/resume/TemplateMiniPreview';
 import { generatePDF } from '@/lib/export-utils';
 import { generateSuggestionsAction } from '../career-actions';
 import { useResumes } from '@/context/ResumeContext';
-import { SuggestionsDashboard } from './SuggestionsDashboard';
 import { ResumeScores } from '@/types';
+import dynamic from 'next/dynamic';
+
+const SuggestionsDashboard = dynamic(
+  () => import('./SuggestionsDashboard').then((mod) => mod.SuggestionsDashboard),
+  { loading: () => <div className="p-4 text-center text-muted-foreground">Loading suggestions...</div> }
+);
 
 type SaveState = 'clean' | 'editing' | 'saving' | 'saved' | 'error' | 'offline';
 
@@ -910,68 +916,60 @@ export default function BuilderClient({
         </div>
       )}
 
-      {/* Builder Header */}
-      <div className="p-2 md:p-4 w-full shrink-0">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="bg-primary/10 p-2.5 rounded-xl shadow-sm border border-primary/10">
-              <FileEdit className="h-7 w-7 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-extrabold tracking-tight">Resume Builder</h1>
-              <p className="text-muted-foreground mt-1 text-lg">Edit and customize your resume content.</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 md:gap-3">
+      <div className="sticky top-0 z-20 px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+        <PageHeader
+          icon={<FileEdit />}
+          title="Resume Builder"
+          description="Edit and customize your resume content."
+          actions={
+          <>
             <Button variant="outline" className="md:hidden shadow-sm font-semibold border-border/50" onClick={() => setShowPreviewMobile(!showPreviewMobile)}>
               {showPreviewMobile ? <LayoutPanelLeft className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
               {showPreviewMobile ? 'Edit' : 'Preview'}
             </Button>
-            <div className="flex items-center gap-2">
-              <Dialog open={isGenerateModalOpen} onOpenChange={setIsGenerateModalOpen}>
-                <Button variant="default" className="shadow-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground hidden md:flex" onClick={() => setIsGenerateModalOpen(true)}>
-                  <Sparkles className="mr-2 h-4 w-4" /> Fill with AI
-                </Button>
-                <DialogContent className="sm:max-w-[500px]">
-                  <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /> Generate Resume with AI</DialogTitle>
-                    <DialogDescription>
-                      Describe yourself, your target role, and your experience. AI will generate a complete resume structure for you.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <Textarea
-                      placeholder="e.g. Senior Frontend Engineer with 5 years of experience in React and Node.js. Target role is Full Stack Developer. Currently working at Acme Corp."
-                      className="min-h-[150px]"
-                      value={generatePrompt}
-                      onChange={(e) => setGeneratePrompt(e.target.value)}
-                    />
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsGenerateModalOpen(false)}>Cancel</Button>
-                    <Button onClick={handleGenerateResume} disabled={isGenerating || !generatePrompt.trim()}>
-                      {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Generate'}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-
-              <Button
-                variant="outline"
-                className="shadow-sm font-semibold border-border/50 bg-background hover:bg-accent"
-                onClick={handleExport}
-                disabled={isExporting}
-              >
-                {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                Export PDF
+            <Dialog open={isGenerateModalOpen} onOpenChange={setIsGenerateModalOpen}>
+              <Button variant="default" className="shadow-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground hidden md:flex" onClick={() => setIsGenerateModalOpen(true)}>
+                <Sparkles className="mr-2 h-4 w-4" /> Fill with AI
               </Button>
-              <Button variant="outline" className="shadow-sm font-semibold border-border/50" onClick={handleSaveVersion} disabled={saveState === 'saving' || !resume.id || resume.id === 'res_123'}>
-                <History className="mr-2 h-4 w-4" /> Save Version
-              </Button>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /> Generate Resume with AI</DialogTitle>
+                  <DialogDescription>
+                    Describe yourself, your target role, and your experience. AI will generate a complete resume structure for you.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <Textarea
+                    placeholder="e.g. Senior Frontend Engineer with 5 years of experience in React and Node.js. Target role is Full Stack Developer. Currently working at Acme Corp."
+                    className="min-h-[150px]"
+                    value={generatePrompt}
+                    onChange={(e) => setGeneratePrompt(e.target.value)}
+                  />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsGenerateModalOpen(false)}>Cancel</Button>
+                  <Button onClick={handleGenerateResume} disabled={isGenerating || !generatePrompt.trim()}>
+                    {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Generate'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
-            </div>
-          </div>
-        </div>
+            <Button
+              variant="outline"
+              className="shadow-sm font-semibold border-border/50 bg-background hover:bg-accent"
+              onClick={handleExport}
+              disabled={isExporting}
+            >
+              {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              Export PDF
+            </Button>
+            <Button variant="outline" className="shadow-sm font-semibold border-border/50" onClick={handleSaveVersion} disabled={saveState === 'saving' || !resume.id || resume.id === 'res_123'}>
+              <History className="mr-2 h-4 w-4" /> Save Version
+            </Button>
+          </>
+        }
+      />
       </div>
 
       {/* Builder Workspace */}
@@ -985,8 +983,8 @@ export default function BuilderClient({
           ref={editorPanelRef}
           className={`flex-col bg-background z-10 ${showPreviewMobile ? 'hidden' : 'flex'}`}
           style={{
-            width: typeof window !== 'undefined' && !showPreviewMobile ? `${splitPosition}%` : '100%',
-            minWidth: typeof window !== 'undefined' && !showPreviewMobile ? '350px' : 'none'
+            width: `${splitPosition}%`,
+            minWidth: '350px'
           }}
         >
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full w-full">
@@ -2450,8 +2448,8 @@ export default function BuilderClient({
         <div
           className={`bg-muted/30 flex-col relative md:border-l border-border/50 ${showPreviewMobile ? 'flex w-full' : 'hidden md:flex'}`}
           style={{
-            width: typeof window !== 'undefined' && !showPreviewMobile ? `${100 - splitPosition}%` : '100%',
-            minWidth: typeof window !== 'undefined' && !showPreviewMobile ? '450px' : 'none'
+            width: `${100 - splitPosition}%`,
+            minWidth: '450px'
           }}
         >
           {/* Zoom & Page Controls Toolbar */}

@@ -17,16 +17,16 @@ export const TemplateMiniPreview = memo(function TemplateMiniPreview({ templateI
 
   return (
     <div className="w-full h-full relative overflow-hidden bg-slate-50 rounded-lg">
-      <div 
-        className="pointer-events-none absolute top-1/2 left-1/2"
-        style={{ 
+      <div
+        className="pointer-events-none absolute top-1/2 left-1/2 p-2"
+        style={{
           transform: `translate(-50%, -50%) scale(${scale})`,
           width: '800px', // matches ResumePreview width
           height: '1131px', // matches ResumePreview height
           transformOrigin: 'center center'
         }}
       >
-        <div className="shadow-2xl bg-white border border-slate-200 w-full h-full">
+        <div className="shadow-lg bg-white border border-slate-200/70 rounded-sm w-full h-full overflow-hidden">
           <ResumePreview resume={previewResume} />
         </div>
       </div>

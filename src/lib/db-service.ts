@@ -4,6 +4,7 @@ import { Resume, MatchReport, AtsReport, CoverLetter, ResumeSuggestion, AtsSugge
 import { SUBSCRIPTION_PLANS, PlanType } from './subscription-config';
 import { cookies } from 'next/headers';
 import { Telemetry } from './telemetry';
+import { cache } from 'react';
 
 // Helper to check if Supabase is configured
 function isSupabaseConfigured() {
@@ -34,7 +35,7 @@ export async function resetUsageIfBillingPeriodExpired(user_id: string, currentE
   return false;
 }
 
-export async function getUserSubscription() {
+export const getUserSubscription = cache(async function getUserSubscription() {
   if (!isSupabaseConfigured()) {
     let userName = 'User';
     let userEmail = 'demo@example.com';
@@ -129,7 +130,7 @@ export async function getUserSubscription() {
     userEmail: user?.email || '',
     userName: user?.user_metadata?.full_name || 'User'
   };
-}
+});
 
 export async function checkAndIncrementAiUsage() {
   const sub = await getUserSubscription();
@@ -196,7 +197,7 @@ export async function upgradePlanMock(newPlan: PlanType) {
   await adminSupabase.from('user_subscriptions').update({ user_plan: newPlan }).eq('user_id', user.id);
 }
 
-export async function getDashboardStats() {
+export const getDashboardStats = cache(async function getDashboardStats() {
   if (!isSupabaseConfigured()) {
     return {
       totalResumes: 1,
@@ -226,7 +227,7 @@ export async function getDashboardStats() {
     versions: versionsResult.count || 0,
     coverLetters: coverLettersResult.count || 0,
   };
-}
+});
 
 export async function getResume(id?: string): Promise<Resume | null> {
   if (!id || id === 'new') return null;

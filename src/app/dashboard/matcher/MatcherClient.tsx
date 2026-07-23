@@ -15,6 +15,11 @@ import { saveMatchReportAction, analyzeMatchAction } from '../career-actions';
 import { lsSaveMatchReport } from '@/lib/local-storage-service';
 import { showSuccess, showError, showLoading, dismissToast } from '@/lib/toast';
 import Link from 'next/link';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContainer } from '@/components/ui/PageContainer';
+import { PageContent } from '@/components/ui/PageContent';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export default function MatcherClient() {
   const { resumes, isLoading: resumesLoading } = useResumes();
@@ -153,40 +158,48 @@ export default function MatcherClient() {
   };
 
   if (resumesLoading) {
-    return (
-      <div className="py-20 text-center flex flex-col items-center justify-center min-h-[400px]">
-        <Loader2 className="animate-spin h-8 w-8 text-primary mb-2" />
-        <span>Loading Job Matcher...</span>
-      </div>
-    );
+    return <LoadingState message="Loading Job Matcher..." />;
   }
 
   if (resumes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-        <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4">
-          <Target className="h-8 w-8 text-primary" />
+      <div className="flex h-full flex-col overflow-y-auto bg-muted/10 font-sans">
+        <div className="sticky top-0 z-20 px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+          <PageHeader
+            icon={<Target />}
+            title="AI Job Matcher"
+            description="Evaluate how well your resume matches any specific job description."
+          />
         </div>
-        <h2 className="text-2xl font-bold mb-2">No Resumes Found</h2>
-        <p className="text-muted-foreground mb-6 max-w-md">You need to create a resume first before you can use the Job Matcher.</p>
-        <Link href="/dashboard/builder?id=new">
-          <Button><Sparkles className="h-4 w-4 mr-2" /> Create Resume</Button>
-        </Link>
+        <PageContainer>
+          <PageContent>
+            <EmptyState
+              icon={<Target />}
+              title="No Resumes Found"
+              description="You need to create a resume first before you can use the Job Matcher."
+              action={
+                <Link href="/dashboard/builder?id=new">
+                  <Button><Sparkles className="h-4 w-4 mr-2" /> Create Resume</Button>
+                </Link>
+              }
+            />
+          </PageContent>
+        </PageContainer>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8 font-sans">
-      <div className="flex items-center gap-4">
-        <div className="bg-primary/10 p-2.5 rounded-xl border border-primary/10">
-          <Target className="h-7 w-7 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">AI Job Matcher</h1>
-          <p className="text-muted-foreground mt-0.5 text-lg">Evaluate how well your resume matches any specific job description.</p>
-        </div>
+    <div className="flex h-full flex-col overflow-y-auto bg-muted/10 font-sans">
+      <div className="sticky top-0 z-20 px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+        <PageHeader
+          icon={<Target />}
+          title="AI Job Matcher"
+          description="Evaluate how well your resume matches any specific job description."
+        />
       </div>
+      <PageContainer>
+        <PageContent>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Input panel */}
@@ -498,6 +511,8 @@ export default function MatcherClient() {
           </div>
         </div>
       )}
+      </PageContent>
+    </PageContainer>
     </div>
   );
 }

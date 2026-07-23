@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import DashboardSidebar from '@/components/layout/DashboardSidebar';
 import { Menu, FileText } from 'lucide-react';
 
 import { ResumeProvider } from '@/context/ResumeContext';
+import { PageSkeleton } from '@/components/ui/PageSkeleton';
 
 export default function DashboardLayoutWrapper({
   children,

@@ -9,6 +9,9 @@ import { FileSignature, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import { Resume } from '@/types';
 
 import { UpgradeModal } from '@/components/ui/UpgradeModal';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContainer } from '@/components/ui/PageContainer';
+import { PageContent } from '@/components/ui/PageContent';
 
 export default function CoverLetterClient({ resume }: { resume: Resume }) {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -44,23 +47,20 @@ export default function CoverLetterClient({ resume }: { resume: Resume }) {
   };
 
   return (
-    <>
+    <div className="flex h-full flex-col overflow-y-auto bg-muted/10 font-sans">
       <UpgradeModal 
         isOpen={error === 'AI_LIMIT_REACHED'} 
         onClose={() => setError(null)} 
       />
-      <div className="p-2 md:p-4 w-full space-y-8 font-sans">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
-        <div className="flex items-center gap-4">
-          <div className="bg-primary/10 p-2.5 rounded-xl shadow-sm border border-primary/10">
-            <FileSignature className="h-7 w-7 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">Cover Letter Generator</h1>
-            <p className="text-muted-foreground mt-1 text-lg">Create a highly tailored cover letter in seconds.</p>
-          </div>
-        </div>
+      <div className="sticky top-0 z-20 px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+        <PageHeader
+          icon={<FileSignature />}
+          title="Cover Letter Generator"
+          description="Create a highly tailored cover letter in seconds."
+        />
       </div>
+      <PageContainer>
+        <PageContent>
 
       <div className="grid md:grid-cols-12 gap-8">
         <div className="md:col-span-4 space-y-6">
@@ -80,7 +80,7 @@ export default function CoverLetterClient({ resume }: { resume: Resume }) {
                 />
               </div>
               
-              {error && (
+              {error && error !== 'AI_LIMIT_REACHED' && (
                 <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-md border border-destructive/20">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   <p>{error}</p>
@@ -135,7 +135,8 @@ export default function CoverLetterClient({ resume }: { resume: Resume }) {
           </Card>
         </div>
       </div>
-      </div>
-    </>
+      </PageContent>
+    </PageContainer>
+    </div>
   );
 }

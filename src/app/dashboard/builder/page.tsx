@@ -3,7 +3,9 @@ import BuilderClient from './BuilderClient';
 
 export default async function ResumeBuilderPage({ searchParams }: { searchParams: Promise<{ id?: string }> }) {
   const params = await searchParams;
-  const initialResume = await getResume(params.id);
-  const userProfile = await getUserSubscription();
+  const [initialResume, userProfile] = await Promise.all([
+    getResume(params.id),
+    getUserSubscription()
+  ]);
   return <BuilderClient initialResume={initialResume} userProfile={userProfile} />;
 }

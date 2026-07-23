@@ -10,6 +10,9 @@ import { templates, TemplateCategory } from '@/lib/templates';
 import { useRouter } from 'next/navigation';
 import { TemplateMiniPreview } from '@/components/resume/TemplateMiniPreview';
 import { TemplatePreviewModal } from '@/components/dashboard/TemplatePreviewModal';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContainer } from '@/components/ui/PageContainer';
+import { PageContent } from '@/components/ui/PageContent';
 
 export default function TemplatesClient() {
   const router = useRouter();
@@ -32,18 +35,17 @@ export default function TemplatesClient() {
   };
 
   return (
-    <div className="p-2 md:p-4 w-full space-y-8 font-sans">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-primary/10 p-2.5 rounded-xl shadow-sm border border-primary/10">
-            <LayoutTemplate className="h-7 w-7 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">Template Gallery</h1>
-            <p className="text-muted-foreground mt-1 text-lg">Choose a design that fits your industry and style.</p>
-          </div>
-        </div>
+    <div className="flex h-full flex-col overflow-y-auto bg-muted/10 font-sans">
+      <div className="sticky top-0 z-20 px-4 md:px-6 bg-card border-b border-border/40 shrink-0">
+        <PageHeader
+          icon={<LayoutTemplate />}
+          title="Template Gallery"
+          description="Choose a design that fits your industry and style."
+        />
       </div>
+
+      <PageContainer>
+        <PageContent>
 
       <div className="flex flex-col md:flex-row justify-between gap-4">
         <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
@@ -72,7 +74,7 @@ export default function TemplatesClient() {
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredTemplates.map((template) => (
           <Card key={template.id} className={`overflow-hidden transition-all duration-300 flex flex-col h-full rounded-2xl hover:border-primary/40 shadow-sm hover:shadow-md border-border group cursor-pointer`}>
-            <div className={`aspect-[1/0.8] w-full bg-slate-50 border-b border-border/50 relative p-0 flex flex-col items-center justify-center`}>
+            <div className={`aspect-[1/0.8] w-full bg-slate-50 border-b border-border/50 relative p-0 flex flex-col items-center justify-center overflow-hidden`}>
               <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               <TemplateMiniPreview templateId={template.id} />
 
@@ -121,6 +123,8 @@ export default function TemplatesClient() {
         templateId={previewTemplateId}
         onApply={handleUseTemplate}
       />
+      </PageContent>
+    </PageContainer>
     </div>
   );
 }
